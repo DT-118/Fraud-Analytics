@@ -1,0 +1,7 @@
+# Score → risk level
+risk_bands:
+  LOW: [0, 29]
+  MEDIUM: [30, 59]
+  HIGH: [60, 79]
+  CRITICAL: [80, 200]
+

@@ -1,0 +1,21 @@
+fraud_type: CONSENT
+
+rules:
+  # Unusually high number of consent grants by the same user within a short time window
+  CONS-01:
+    enabled: true
+    feature: consent_grant_count
+    thresholds:
+      - min: 5
+        max: 9
+        weight: 30
+      - min: 10
+        weight: 60
+
+  # Consent usage attempted outside the originally allowed scope or purpose
+  CONS-02:
+    enabled: true
+    feature: consent_scope_violation
+    thresholds:
+      - min: 1
+        weight: 60

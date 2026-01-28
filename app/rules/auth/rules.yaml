@@ -1,0 +1,103 @@
+fraud_type: AUTH
+
+rules:
+
+  # Multiple consecutive login failures for the same user within a short window
+  AUTH-01:
+    enabled: true
+    feature: user_fail_count
+    thresholds:
+      - min: 3
+        max: 4
+        weight: 30
+      - min: 5
+        weight: 60
+
+  # Same source IP failing login attempts across many different users
+  AUTH-02:
+    enabled: true
+    feature: ip_failed_subject_count
+    thresholds:
+      - min: 5
+        weight: 40
+
+  # Successful login following a sustained failure streak (credential stuffing signal)
+  AUTH-03:
+    enabled: true
+    feature: fail_before_success
+    thresholds:
+      - min: 3
+        weight: 20
+
+  # Login from a device not previously seen for this user
+  AUTH-04:
+    enabled: true
+    feature: is_new_device
+    thresholds:
+      - min: 1
+        max: 1
+        weight: 15     # second device
+      - min: 2
+        max: 2
+        weight: 30     # third device
+      - min: 3
+        weight: 50     # fourth device or more
+
+  # Sudden geographic location change compared to last known login
+  AUTH-05:
+    enabled: true
+    feature: geo_mismatch
+    thresholds:
+      - min: 1
+        weight: 20
+
+  # Browser downgrade detected under recent authentication failure pressure
+  AUTH-06:
+    enabled: true
+    feature: is_old_browser
+    thresholds:
+      - min: 1
+        weight: 15
+
+  # Login using emulator-like or automation-associated screen resolutions
+  AUTH-07:
+    enabled: true
+    feature: suspicious_resolution
+    thresholds:
+      - min: 1
+        weight: 10
+
+  # Language preference changes across successful logins
+  AUTH-08:
+    enabled: true
+    feature: language_flip_on_success
+    thresholds:
+      - min: 1
+        weight: 10
+
+  # Login occurring outside normal daytime hours
+  AUTH-09:
+    enabled: true
+    feature: odd_login_hour
+    thresholds:
+      - min: 1
+        weight: 15
+
+  # Repeated biometric liveness spoof detections during authentication
+  LIVE-01:
+    enabled: true
+    feature: spoof_detected
+    thresholds:
+      - min: 1
+        max: 1
+        weight: 25
+      - min: 2
+        weight: 40
+
+  # Required liveness check missing during authentication
+  LIVE-02:
+    enabled: true
+    feature: missing_liveness
+    thresholds:
+      - min: 1
+        weight: 60

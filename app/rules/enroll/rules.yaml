@@ -1,0 +1,27 @@
+fraud_type: ENROLL
+
+rules:
+
+  # Repeated document verification failures during enrollment (e.g., MRZ / scan failure)
+  ENR-01:
+    enabled: true
+    feature: document_failures
+    thresholds:
+      - min: 2
+        weight: 30
+
+  # Repeated biometric mismatch between enrollment face and document photo
+  ENR-02:
+    enabled: true
+    feature: face_doc_mismatch
+    thresholds:
+      - min: 2
+        weight: 40
+
+  # Same device attempting enrollment for multiple different identities
+  ENR-03:
+    enabled: true
+    feature: duplicate_device_enroll
+    thresholds:
+      - min: 3
+        weight: 35

@@ -1,0 +1,22 @@
+fraud_type: WALLET
+
+rules:
+
+  # Unusually high number of wallet signing operations in a short time window
+  WAL-01:
+    enabled: true
+    feature: wallet_sign_velocity
+    thresholds:
+      - min: 5
+        max: 9
+        weight: 30
+      - min: 10
+        weight: 60
+
+  # Critical wallet action performed without a recent successful authentication
+  WAL-02:
+    enabled: true
+    feature: missing_recent_reauth
+    thresholds:
+      - min: 1
+        weight: 70

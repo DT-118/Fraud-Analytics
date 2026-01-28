@@ -1,0 +1,89 @@
+# ============================================================
+# Thresholds Configuration
+# ------------------------------------------------------------
+# Purpose:
+# - Controls FEATURE behavior (not scoring)
+# - Decides when Redis counters are incremented
+# - Decides when a feature becomes "active"
+# ============================================================
+# ---------------------------------------------------------------------------
+# Authentication thresholds
+# ---------------------------------------------------------------------------
+
+AUTH-01:
+  min_failures: 3            # Minimum failed logins before feature activates
+
+AUTH-02:
+  min_subjects_per_ip: 3     # Distinct users failing from same IP
+
+AUTH-03:
+  min_failures_before_success: 3
+                             # Failures required before success is suspicious
+
+AUTH-04:
+  enabled: true              # Track new device usage
+
+AUTH-05:
+  enabled: true              # Track geo-location changes
+
+AUTH-06:
+  min_failures: 2            # Browser downgrade evaluated only after failures
+  min_browser_drop: 10       # Chrome major version downgrade threshold
+
+AUTH-07:
+  min_emulator_signals: 1    # Emulator / suspicious resolution signals
+
+AUTH-08:
+  min_language_changes: 2    # Language changes before flagging
+
+# AUTH-09:
+#   min_history_days: 3        # Baseline days required (future use)
+#   min_distinct_hours: 3      # Distinct login hours baseline
+
+
+# ---------------------------------------------------------------------------
+# Liveness thresholds
+# ---------------------------------------------------------------------------
+
+LIVE-01:
+  enabled: true              # Multiple spoof detections
+
+LIVE-02:
+  enabled: true              # Liveness required but missing
+
+
+# ---------------------------------------------------------------------------
+# Enrollment thresholds
+# ---------------------------------------------------------------------------
+
+ENR-01:
+  enabled: true              # Document verification failures
+  min_failures: 2            # Retry threshold before risk
+
+ENR-02:
+  enabled: true              # Face vs document mismatch
+  min_mismatches: 2          # Allowed mismatches before risk
+
+ENR-03:
+  enabled: true              # Same device enrolling multiple users
+  max_identities: 3          # Safe limit (family/shared device)
+
+
+# ---------------------------------------------------------------------------
+# Consent thresholds
+# ---------------------------------------------------------------------------
+
+CONS-01:
+  enabled: true              # Consent grant spike detection
+  min_grants: 5              # Grants allowed in window
+
+CONS-02:
+  enabled: true              # Consent scope violation detection
+
+
+# ---------------------------------------------------------------------------
+# Wallet thresholds
+# ---------------------------------------------------------------------------
+
+WAL-02:
+  max_reauth_age_seconds: 300  # Critical wallet action requires re-auth (5 mins)

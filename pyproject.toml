@@ -1,0 +1,25 @@
+[tool.black]
+line-length = 88
+target-version = ["py38"]
+
+
+[tool.ruff]
+target-version = "py38"
+line-length = 88
+
+select = [
+  "E",   # PEP8 errors
+  "F",   # Pyflakes (real bugs)
+  "B",   # Bugbear
+  "I",   # Import sorting
+  "UP",  # Python upgrades
+]
+
+ignore = [
+  "E501",  # Line length (Black handles this)
+]
+
+exclude = [
+  ".venv",
+  "__pycache__",
+]
