@@ -1,9 +1,9 @@
 from core.context import Context
-from core.settings import THRESHOLDS, REDIS_TTL
-from storage.redis_client import redis_client
-from storage.redis_utils import touch
 from core.errors import ErrorCode
 from core.logger import logger
+from core.settings import REDIS_TTL, THRESHOLDS
+from storage.redis_client import redis_client
+from storage.redis_utils import touch
 
 
 def build_wallet_features(context: Context) -> dict:
@@ -54,11 +54,11 @@ def build_wallet_features(context: Context) -> dict:
 
         return features
 
-    except Exception:
+    except Exception as err:
         logger.exception(
             "%s:WALLET_FEATURE_FAILED subject_id=%s",
             ErrorCode.REDIS_ERROR,
             context.subject_id,
         )
         print(f"[ERROR] {ErrorCode.REDIS_ERROR} WALLET failed")
-        raise RuntimeError(ErrorCode.REDIS_ERROR)
+        raise RuntimeError(ErrorCode.REDIS_ERROR) from err

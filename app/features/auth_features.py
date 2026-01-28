@@ -1,9 +1,9 @@
-from storage.redis_client import redis_client
-from storage.redis_utils import touch
 from core.context import Context
-from core.settings import THRESHOLDS, REDIS_TTL
 from core.errors import ErrorCode
 from core.logger import logger
+from core.settings import REDIS_TTL, THRESHOLDS
+from storage.redis_client import redis_client
+from storage.redis_utils import touch
 
 
 def is_emulator_resolution(screen_resolution: str) -> bool:
@@ -49,14 +49,14 @@ def build_auth01_auth03_features(context: Context) -> dict:
 
         return features
 
-    except Exception:
+    except Exception as err:
         logger.exception(
             "%s:AUTH_FEATURE_REDIS_FAILURE rule=AUTH-01/AUTH-03 subject_id=%s",
             ErrorCode.REDIS_ERROR,
             context.subject_id,
         )
         print(f"[ERROR] {ErrorCode.REDIS_ERROR}: AUTH-01/AUTH-03 Redis failure")
-        raise RuntimeError(ErrorCode.REDIS_ERROR)
+        raise RuntimeError(ErrorCode.REDIS_ERROR) from err
 
 
 def build_auth02_ip_bruteforce_feature(context: Context) -> int:
@@ -83,14 +83,14 @@ def build_auth02_ip_bruteforce_feature(context: Context) -> int:
             else 0
         )
 
-    except Exception:
+    except Exception as err:
         logger.exception(
             "%s:AUTH_FEATURE_REDIS_FAILURE rule=AUTH-02 ip=%s",
             ErrorCode.REDIS_ERROR,
             context.security_payload.src_ip,
         )
         print(f"[ERROR] {ErrorCode.REDIS_ERROR}: AUTH-02 Redis failure")
-        raise RuntimeError(ErrorCode.REDIS_ERROR)
+        raise RuntimeError(ErrorCode.REDIS_ERROR) from err
 
 
 def build_new_device_feature(context: Context) -> int:
@@ -114,14 +114,14 @@ def build_new_device_feature(context: Context) -> int:
         total_known_devices = redis_client.scard(redis_key)
         return max(0, total_known_devices - 1)
 
-    except Exception:
+    except Exception as err:
         logger.exception(
             "%s:AUTH_FEATURE_REDIS_FAILURE rule=AUTH-04 subject_id=%s",
             ErrorCode.REDIS_ERROR,
             context.subject_id,
         )
         print(f"[ERROR] {ErrorCode.REDIS_ERROR}: AUTH-04 Redis failure")
-        raise RuntimeError(ErrorCode.REDIS_ERROR)
+        raise RuntimeError(ErrorCode.REDIS_ERROR) from err
 
 
 def build_geo_mismatch_feature(context: Context) -> int:
@@ -149,14 +149,14 @@ def build_geo_mismatch_feature(context: Context) -> int:
 
         return 0
 
-    except Exception:
+    except Exception as err:
         logger.exception(
             "%s:AUTH_FEATURE_REDIS_FAILURE rule=AUTH-05 subject_id=%s",
             ErrorCode.REDIS_ERROR,
             context.subject_id,
         )
         print(f"[ERROR] {ErrorCode.REDIS_ERROR}: AUTH-05 Redis failure")
-        raise RuntimeError(ErrorCode.REDIS_ERROR)
+        raise RuntimeError(ErrorCode.REDIS_ERROR) from err
 
 
 def build_old_browser_feature(context: Context) -> int:
@@ -197,14 +197,14 @@ def build_old_browser_feature(context: Context) -> int:
             else 0
         )
 
-    except Exception:
+    except Exception as err:
         logger.exception(
             "%s:AUTH_FEATURE_REDIS_FAILURE rule=AUTH-06 subject_id=%s",
             ErrorCode.REDIS_ERROR,
             context.subject_id,
         )
         print(f"[ERROR] {ErrorCode.REDIS_ERROR}: AUTH-06 Redis failure")
-        raise RuntimeError(ErrorCode.REDIS_ERROR)
+        raise RuntimeError(ErrorCode.REDIS_ERROR) from err
 
 
 def build_screen_resolution_feature(context: Context) -> int:
@@ -229,14 +229,14 @@ def build_screen_resolution_feature(context: Context) -> int:
         resolution_count = redis_client.scard(redis_key)
         return resolution_count if resolution_count >= minimum_required_signals else 0
 
-    except Exception:
+    except Exception as err:
         logger.exception(
             "%s:AUTH_FEATURE_REDIS_FAILURE rule=AUTH-07 subject_id=%s",
             ErrorCode.REDIS_ERROR,
             context.subject_id,
         )
         print(f"[ERROR] {ErrorCode.REDIS_ERROR}: AUTH-07 Redis failure")
-        raise RuntimeError(ErrorCode.REDIS_ERROR)
+        raise RuntimeError(ErrorCode.REDIS_ERROR) from err
 
 
 def build_language_flip_feature(context: Context) -> int:
@@ -269,14 +269,14 @@ def build_language_flip_feature(context: Context) -> int:
         change_count = int(redis_client.get(language_change_counter_key) or 0)
         return change_count if change_count >= minimum_language_changes else 0
 
-    except Exception:
+    except Exception as err:
         logger.exception(
             "%s:AUTH_FEATURE_REDIS_FAILURE rule=AUTH-08 subject_id=%s",
             ErrorCode.REDIS_ERROR,
             context.subject_id,
         )
         print(f"[ERROR] {ErrorCode.REDIS_ERROR}: AUTH-08 Redis failure")
-        raise RuntimeError(ErrorCode.REDIS_ERROR)
+        raise RuntimeError(ErrorCode.REDIS_ERROR) from err
 
 
 def build_odd_login_hour_feature(context: Context) -> int:
@@ -287,14 +287,14 @@ def build_odd_login_hour_feature(context: Context) -> int:
         login_hour = context.event_time.hour
         return 1 if login_hour < 6 or login_hour > 22 else 0
 
-    except Exception:
+    except Exception as err:
         logger.exception(
             "%s:AUTH_FEATURE_FAILURE rule=AUTH-09 subject_id=%s",
             ErrorCode.INTERNAL_ERROR,
             context.subject_id,
         )
         print(f"[ERROR] {ErrorCode.INTERNAL_ERROR}: AUTH-09 failure")
-        raise RuntimeError(ErrorCode.INTERNAL_ERROR)
+        raise RuntimeError(ErrorCode.INTERNAL_ERROR) from err
 
 
 # not same odd login hour

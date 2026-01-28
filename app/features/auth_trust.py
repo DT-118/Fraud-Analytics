@@ -1,8 +1,8 @@
-from storage.redis_client import redis_client
-from storage.redis_utils import touch
-from core.settings import REDIS_TTL
 from core.errors import ErrorCode
 from core.logger import logger
+from core.settings import REDIS_TTL
+from storage.redis_client import redis_client
+from storage.redis_utils import touch
 
 
 def record_recent_successful_authentication(context):
@@ -30,7 +30,7 @@ def record_recent_successful_authentication(context):
         # Extend TTL so trust window slides forward on each success
         touch(redis_key, REDIS_TTL["auth"]["reauth_memory"])
 
-    except Exception:
+    except Exception as err:
         logger.exception(
             "%s:AUTH_TRUST_REDIS_FAILURE subject_id=%s",
             ErrorCode.REDIS_ERROR,
@@ -40,4 +40,4 @@ def record_recent_successful_authentication(context):
             f"[ERROR] {ErrorCode.REDIS_ERROR}: "
             f"Failed to record recent authentication for subject_id={context.subject_id}"
         )
-        raise RuntimeError(ErrorCode.REDIS_ERROR)
+        raise RuntimeError(ErrorCode.REDIS_ERROR) from err

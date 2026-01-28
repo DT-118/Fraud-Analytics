@@ -1,9 +1,9 @@
-from storage.redis_client import redis_client
-from storage.redis_utils import touch
-from core.settings import THRESHOLDS, REDIS_TTL
 from core.context import Context
 from core.errors import ErrorCode
 from core.logger import logger
+from core.settings import REDIS_TTL, THRESHOLDS
+from storage.redis_client import redis_client
+from storage.redis_utils import touch
 
 
 def build_consent_grant_spike_feature(context: Context) -> int:
@@ -31,14 +31,14 @@ def build_consent_grant_spike_feature(context: Context) -> int:
 
         return int(redis_client.get(redis_key) or 0)
 
-    except Exception:
+    except Exception as err:
         logger.exception(
             "%s:CONSENT_GRANT_SPIKE_FAILED subject_id=%s",
             ErrorCode.REDIS_ERROR,
             context.subject_id,
         )
         print(f"[ERROR] {ErrorCode.REDIS_ERROR} CONS-01 failed")
-        raise RuntimeError(ErrorCode.REDIS_ERROR)
+        raise RuntimeError(ErrorCode.REDIS_ERROR) from err
 
 
 def build_consent_scope_violation_feature(context: Context) -> int:
@@ -63,14 +63,14 @@ def build_consent_scope_violation_feature(context: Context) -> int:
 
         return 0 if payload.scope in payload.allowed_scopes else 1
 
-    except Exception:
+    except Exception as err:
         logger.exception(
             "%s:CONSENT_SCOPE_VIOLATION_FAILED subject_id=%s",
             ErrorCode.INTERNAL_ERROR,
             context.subject_id,
         )
         print(f"[ERROR] {ErrorCode.INTERNAL_ERROR} CONS-02 failed")
-        raise RuntimeError(ErrorCode.INTERNAL_ERROR)
+        raise RuntimeError(ErrorCode.INTERNAL_ERROR) from err
 
 
 def build_consent_features(context: Context) -> dict:

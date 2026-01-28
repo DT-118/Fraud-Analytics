@@ -1,4 +1,5 @@
 import os
+
 import redis
 from core.errors import ErrorCode
 from core.logger import logger
@@ -34,7 +35,7 @@ def get_redis_client():
     except Exception as exc:
         logger.exception("FE-502:REDIS_CONNECTION_FAILED")
         print("[REDIS ERROR] Redis connection failed:", exc)
-        raise RuntimeError(ErrorCode.REDIS_ERROR)
+        raise RuntimeError(ErrorCode.REDIS_ERROR) from exc
 
 
 # Singleton Redis client

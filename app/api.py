@@ -4,13 +4,13 @@ api.py
 HTTP API layer for Fraud Engine.
 """
 
-from fastapi import FastAPI, HTTPException
 from core.context import Context
-from storage.db import get_db_connection
-from services.fraud_service import handle_fraud_event
-from core.responses import success_response, error_response
 from core.errors import ErrorCode
 from core.logger import logger
+from core.responses import error_response, success_response
+from fastapi import FastAPI, HTTPException
+from services.fraud_service import handle_fraud_event
+from storage.db import get_db_connection
 
 app = FastAPI()
 
@@ -41,10 +41,10 @@ def score_event(request_context: Context):
 
         return error_response(error_code)
 
-    except Exception:
+    except Exception as err:
         db_connection.rollback()
         logger.exception(f"{ErrorCode.INTERNAL_ERROR}: API failure")
-        raise HTTPException(status_code=500)
+        raise HTTPException(status_code=500) from err
 
     finally:
         db_connection.close()

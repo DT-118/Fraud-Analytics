@@ -1,7 +1,8 @@
-import requests
-import uuid
 import json
+import uuid
 from datetime import datetime, timezone
+
+import requests
 
 # -------------------------------------------------------------------
 # Fraud scoring API endpoint

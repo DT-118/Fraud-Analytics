@@ -5,18 +5,18 @@ Service layer responsible for executing end-to-end fraud processing.
 """
 
 from core.context import Context
-from rules.engine import load_rules, run_rules
-from scoring.engine import load_scores, aggregate_score, classify_risk
-from features.auth_features import build_auth_features
-from features.live_features import build_liveness_features
-from features.enroll_features import build_enroll_features
-from features.consent_features import build_consent_features
-from features.wallet_features import build_wallet_features
-from features.auth_trust import record_recent_successful_authentication
-from storage.event_repo import insert_fraud_event
-from storage.decision_repo import insert_fraud_decision
 from core.errors import ErrorCode
 from core.logger import logger
+from features.auth_features import build_auth_features
+from features.auth_trust import record_recent_successful_authentication
+from features.consent_features import build_consent_features
+from features.enroll_features import build_enroll_features
+from features.live_features import build_liveness_features
+from features.wallet_features import build_wallet_features
+from rules.engine import load_rules, run_rules
+from scoring.engine import aggregate_score, classify_risk, load_scores
+from storage.decision_repo import insert_fraud_decision
+from storage.event_repo import insert_fraud_event
 
 # Rule paths
 AUTH_RULES_PATH = "rules/auth/rules.yaml"

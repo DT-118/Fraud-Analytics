@@ -15,39 +15,36 @@ from core.logger import logger
 
 
 def _load_yaml_config(path: str, error_code: ErrorCode) -> dict:
-    """
-    Load a YAML configuration file with standardized error handling.
-    """
     try:
-        with open(path, "r") as file:
+        with open(path) as file:
             return yaml.safe_load(file)
 
-    except FileNotFoundError:
+    except FileNotFoundError as err:
         logger.exception(
             "%s:CONFIG_FILE_MISSING path=%s",
             error_code,
             path,
         )
         print(f"[ERROR] {error_code}: CONFIG_FILE_MISSING -> {path}")
-        raise RuntimeError(error_code)
+        raise RuntimeError(error_code) from err
 
-    except yaml.YAMLError:
+    except yaml.YAMLError as err:
         logger.exception(
             "%s:CONFIG_PARSE_ERROR path=%s",
             error_code,
             path,
         )
         print(f"[ERROR] {error_code}: CONFIG_PARSE_ERROR -> {path}")
-        raise RuntimeError(error_code)
+        raise RuntimeError(error_code) from err
 
-    except Exception:
+    except Exception as err:
         logger.exception(
             "%s:CONFIG_LOAD_FAILURE path=%s",
             error_code,
             path,
         )
         print(f"[ERROR] {error_code}: CONFIG_LOAD_FAILURE -> {path}")
-        raise RuntimeError(error_code)
+        raise RuntimeError(error_code) from err
 
 
 # -------------------------------------------------

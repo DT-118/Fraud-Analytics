@@ -1,11 +1,12 @@
 import json
+
 from confluent_kafka import Consumer
 from core.context import Context
-from storage.db import get_db_connection
-from services.fraud_service import handle_fraud_event
-from kafka_producer import produce_scored_event, produce_dlq_event
 from core.errors import ErrorCode
 from core.logger import logger
+from kafka_producer import produce_dlq_event, produce_scored_event
+from services.fraud_service import handle_fraud_event
+from storage.db import get_db_connection
 
 KAFKA_BOOTSTRAP_SERVERS = "84.46.255.66:9092"
 AUTH_LOGIN_TOPIC = "auth.login.events"

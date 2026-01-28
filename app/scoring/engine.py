@@ -13,7 +13,7 @@ def load_scores(scores_file_path: str) -> dict:
     (LOW, MEDIUM, HIGH, CRITICAL).
     """
     try:
-        with open(scores_file_path, "r") as file:
+        with open(scores_file_path) as file:
             score_config = yaml.safe_load(file)
 
         if not score_config or "risk_bands" not in score_config:

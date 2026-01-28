@@ -1,6 +1,6 @@
-from psycopg2.extras import Json
 from core.errors import ErrorCode
 from core.logger import logger
+from psycopg2.extras import Json
 
 
 def insert_fraud_decision(
@@ -59,4 +59,4 @@ def insert_fraud_decision(
     except Exception as exc:
         logger.exception("FE-501:DATABASE_DECISION_INSERT_FAILED")
         print("[DB ERROR] Failed to insert fraud decision:", exc)
-        raise RuntimeError(ErrorCode.DB_ERROR)
+        raise RuntimeError(ErrorCode.DB_ERROR) from exc

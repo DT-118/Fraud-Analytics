@@ -1,9 +1,9 @@
-from storage.redis_client import redis_client
-from storage.redis_utils import touch
 from core.context import Context
-from core.settings import THRESHOLDS, REDIS_TTL
 from core.errors import ErrorCode
 from core.logger import logger
+from core.settings import REDIS_TTL, THRESHOLDS
+from storage.redis_client import redis_client
+from storage.redis_utils import touch
 
 
 def build_enr01_document_fail_feature(context: Context) -> int:
@@ -33,14 +33,14 @@ def build_enr01_document_fail_feature(context: Context) -> int:
 
         return failure_count if failure_count >= minimum_failures else 0
 
-    except Exception:
+    except Exception as err:
         logger.exception(
             "%s:ENROLL_DOC_FAIL_FAILED subject_id=%s",
             ErrorCode.REDIS_ERROR,
             context.subject_id,
         )
         print(f"[ERROR] {ErrorCode.REDIS_ERROR} ENR-01 failed")
-        raise RuntimeError(ErrorCode.REDIS_ERROR)
+        raise RuntimeError(ErrorCode.REDIS_ERROR) from err
 
 
 def build_enr02_face_doc_mismatch_feature(context: Context) -> int:
@@ -70,14 +70,14 @@ def build_enr02_face_doc_mismatch_feature(context: Context) -> int:
 
         return mismatch_count if mismatch_count >= minimum_mismatches else 0
 
-    except Exception:
+    except Exception as err:
         logger.exception(
             "%s:ENROLL_FACE_DOC_FAILED subject_id=%s",
             ErrorCode.REDIS_ERROR,
             context.subject_id,
         )
         print(f"[ERROR] {ErrorCode.REDIS_ERROR} ENR-02 failed")
-        raise RuntimeError(ErrorCode.REDIS_ERROR)
+        raise RuntimeError(ErrorCode.REDIS_ERROR) from err
 
 
 def build_enr03_duplicate_device_enroll_feature(context: Context) -> int:
@@ -108,14 +108,14 @@ def build_enr03_duplicate_device_enroll_feature(context: Context) -> int:
             else 0
         )
 
-    except Exception:
+    except Exception as err:
         logger.exception(
             "%s:ENROLL_DEVICE_DUPLICATE_FAILED device_id=%s",
             ErrorCode.REDIS_ERROR,
             device_id,
         )
         print(f"[ERROR] {ErrorCode.REDIS_ERROR} ENR-03 failed")
-        raise RuntimeError(ErrorCode.REDIS_ERROR)
+        raise RuntimeError(ErrorCode.REDIS_ERROR) from err
 
 
 def build_enroll_features(context: Context) -> dict:

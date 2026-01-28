@@ -5,8 +5,9 @@ Kafka producer utilities for Fraud Engine.
 """
 
 import json
-from confluent_kafka import Producer
 from datetime import datetime, timezone
+
+from confluent_kafka import Producer
 from core.errors import ErrorCode
 from core.logger import logger
 

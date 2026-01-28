@@ -1,6 +1,6 @@
-from storage.redis_client import redis_client
 from core.errors import ErrorCode
 from core.logger import logger
+from storage.redis_client import redis_client
 
 
 def touch(redis_key: str, ttl_seconds: int):
@@ -22,4 +22,4 @@ def touch(redis_key: str, ttl_seconds: int):
             f"[REDIS ERROR] Failed to refresh TTL for key={redis_key}:",
             exc,
         )
-        raise RuntimeError(ErrorCode.REDIS_ERROR)
+        raise RuntimeError(ErrorCode.REDIS_ERROR) from exc

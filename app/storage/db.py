@@ -1,4 +1,5 @@
 import os
+
 import psycopg2
 from core.errors import ErrorCode
 from core.logger import logger
@@ -28,4 +29,4 @@ def get_db_connection():
             "FE-501:DATABASE_CONNECTION_FAILED",
         )
         print("[DB ERROR] Failed to connect to database:", exc)
-        raise RuntimeError(ErrorCode.DB_ERROR)
+        raise RuntimeError(ErrorCode.DB_ERROR) from exc

@@ -14,7 +14,7 @@ def load_rules(rules_file_path: str) -> dict:
     as a dictionary.
     """
     try:
-        with open(rules_file_path, "r") as file:
+        with open(rules_file_path) as file:
             rules_config = yaml.safe_load(file)
 
         if not rules_config or "rules" not in rules_config:
