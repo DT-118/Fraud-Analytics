@@ -3,6 +3,8 @@
 import yaml
 from core.errors import ErrorCode
 from core.logger import logger
+from typing import Optional
+
 
 
 def load_rules(rules_file_path: str) -> dict:
@@ -32,7 +34,7 @@ def evaluate_rule(
     rule_id: str,
     rule_definition: dict,
     feature_values: dict,
-) -> dict | None:
+) -> Optional[dict]:
     """
     Evaluate a single fraud rule against computed feature values.
 
@@ -49,10 +51,11 @@ def evaluate_rule(
             return None
 
         for threshold_band in rule_definition["thresholds"]:
-            minimum_value = threshold_band["min"]
-            maximum_value = threshold_band.get("max")
-
+            minimum_value = float(threshold_band["min"])
+            maximum_value = threshold_band.get("max", None)
+        
             if maximum_value is not None:
+                maximum_value = float(maximum_value)
                 if minimum_value <= feature_value <= maximum_value:
                     return {
                         "rule_id": rule_id,
@@ -64,8 +67,6 @@ def evaluate_rule(
                         "rule_id": rule_id,
                         "weight": threshold_band["weight"],
                     }
-
-        return None
 
     except Exception as exc:
         print(f"[RULES][ERROR] Rule evaluation failed for {rule_id}")

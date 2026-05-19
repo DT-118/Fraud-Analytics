@@ -5,6 +5,9 @@ from core.settings import REDIS_TTL, THRESHOLDS
 from storage.redis_client import redis_client
 from storage.redis_utils import touch
 
+from datetime import time
+from zoneinfo import ZoneInfo
+
 
 def is_emulator_resolution(screen_resolution: str) -> bool:
     """
@@ -20,8 +23,14 @@ def build_auth01_auth03_features(context: Context) -> dict:
     Builds AUTH-01 and AUTH-03 authentication failure-related features.
     """
     try:
+        if not THRESHOLDS["AUTH-01"]["enabled"] and not THRESHOLDS["AUTH-03"]["enabled"]:
+          return {
+              "user_fail_count": 0,
+              "fail_before_success": 0,
+          }
+
         redis_key = f"fail:user:{context.subject_id}"
-        min_failures = THRESHOLDS["AUTH-01"]["min_failures"]
+        #min_failures = THRESHOLDS["AUTH-01"]["min_failures"]
         min_failures_before_success = THRESHOLDS["AUTH-03"][
             "min_failures_before_success"
         ]
@@ -35,17 +44,17 @@ def build_auth01_auth03_features(context: Context) -> dict:
         }
 
         if context.success:
-            if existing_fail_count >= min_failures_before_success:
+            if existing_fail_count >= min_failures_before_success and context.authentication_type=="login":
                 features["fail_before_success"] = existing_fail_count
 
             redis_client.delete(redis_key)
             return features
 
         updated_fail_count = redis_client.incr(redis_key)
-        redis_client.expire(redis_key, sliding_window_seconds)
+        touch(redis_key, sliding_window_seconds)
 
-        if updated_fail_count >= min_failures:
-            features["user_fail_count"] = updated_fail_count
+        #if updated_fail_count >= min_failures:
+        features["user_fail_count"] = updated_fail_count
 
         return features
 
@@ -64,23 +73,28 @@ def build_auth02_ip_bruteforce_feature(context: Context) -> int:
     Builds AUTH-02 feature to detect brute-force attempts from a single IP.
     """
     try:
-        minimum_distinct_subjects = THRESHOLDS["AUTH-02"]["min_subjects_per_ip"]
+        if not context.authentication_type == 'login':
+            return 0
+            
+        if not THRESHOLDS["AUTH-02"]["enabled"]:
+          return 0
+        #minimum_distinct_subjects = THRESHOLDS["AUTH-02"]["min_subjects_per_ip"]
         source_ip = context.security_payload.src_ip
-
+  
         if not source_ip or context.success:
             return 0
-
+  
         redis_key = f"ip:fail:subjects:{source_ip}"
         sliding_window_seconds = REDIS_TTL["auth"]["ip_fail_window"]
-
+  
         redis_client.sadd(redis_key, context.subject_id)
-        redis_client.expire(redis_key, sliding_window_seconds)
-
+        touch(redis_key, sliding_window_seconds)
+  
         distinct_subject_count = redis_client.scard(redis_key)
         return (
             distinct_subject_count
-            if distinct_subject_count >= minimum_distinct_subjects
-            else 0
+  #            if distinct_subject_count >= minimum_distinct_subjects
+  #            else 0
         )
 
     except Exception as err:
@@ -98,6 +112,9 @@ def build_new_device_feature(context: Context) -> int:
     Builds AUTH-04 feature to detect new devices for a subject.
     """
     try:
+        if not context.authentication_type == 'login':
+            return 0
+            
         if not THRESHOLDS["AUTH-04"]["enabled"]:
             return 0
 
@@ -129,6 +146,9 @@ def build_geo_mismatch_feature(context: Context) -> int:
     Builds AUTH-05 feature to detect geographic changes.
     """
     try:
+        if not context.authentication_type == 'login':
+            return 0
+            
         if not THRESHOLDS["AUTH-05"]["enabled"]:
             return 0
 
@@ -161,9 +181,15 @@ def build_geo_mismatch_feature(context: Context) -> int:
 
 def build_old_browser_feature(context: Context) -> int:
     """
-    Builds AUTH-06 feature to detect browser downgrade after failures.
+    AUTH-06: Browser downgrade after failures
     """
     try:
+        if not context.authentication_type == 'login':
+            return 0
+            
+        if not THRESHOLDS["AUTH-06"]["enabled"]:
+          return 0
+
         minimum_browser_drop = THRESHOLDS["AUTH-06"]["min_browser_drop"]
         min_failures = THRESHOLDS["AUTH-06"]["min_failures"]
 
@@ -175,27 +201,36 @@ def build_old_browser_feature(context: Context) -> int:
             user_agent_string.split("Chrome/")[1].split(".")[0]
         )
 
+        # Check failure pressure first
         failure_key = f"fail:user:{context.subject_id}"
         fail_count = int(redis_client.get(failure_key) or 0)
         if fail_count < min_failures:
             return 0
 
         redis_key = f"browser:user:{context.subject_id}"
-        device_memory_seconds = REDIS_TTL["identity"]["device_memory"]
+        device_memory_seconds = REDIS_TTL["identity"]["browser_memory"]
 
-        previous_browser_version = redis_client.get(redis_key)
-        if not previous_browser_version:
+        previous_browser_version_raw = redis_client.get(redis_key)
+
+        # FIRST TIME: store version and exit
+        if not previous_browser_version_raw:
+            redis_client.set(redis_key, current_browser_version)
+            touch(redis_key, device_memory_seconds)
             return 0
 
+        previous_browser_version = int(previous_browser_version_raw)
+
+        # DOWNGRADE DETECTION
+        downgrade_detected = (
+            previous_browser_version - current_browser_version
+            >= minimum_browser_drop
+        )
+
+        # Always update to latest version
         redis_client.set(redis_key, current_browser_version)
         touch(redis_key, device_memory_seconds)
 
-        return (
-            1
-            if int(previous_browser_version) - current_browser_version
-            >= minimum_browser_drop
-            else 0
-        )
+        return 1 if downgrade_detected else 0
 
     except Exception as err:
         logger.exception(
@@ -203,8 +238,8 @@ def build_old_browser_feature(context: Context) -> int:
             ErrorCode.REDIS_ERROR,
             context.subject_id,
         )
-        print(f"[ERROR] {ErrorCode.REDIS_ERROR}: AUTH-06 Redis failure")
         raise RuntimeError(ErrorCode.REDIS_ERROR) from err
+
 
 
 def build_screen_resolution_feature(context: Context) -> int:
@@ -212,22 +247,29 @@ def build_screen_resolution_feature(context: Context) -> int:
     Builds AUTH-07 feature to detect emulator-like resolutions.
     """
     try:
+        if not context.authentication_type == 'login':
+            return 0
+            
+        if not THRESHOLDS["AUTH-07"]["enabled"]:
+           return 0
+
         screen_resolution = context.security_payload.screen_resolution
         if not screen_resolution:
             return 0
 
-        minimum_required_signals = THRESHOLDS["AUTH-07"]["min_emulator_signals"]
+        #minimum_required_signals = THRESHOLDS["AUTH-07"]["min_emulator_signals"]
         if not is_emulator_resolution(screen_resolution):
             return 0
 
         redis_key = f"resolution:user:{context.subject_id}"
-        device_memory_seconds = REDIS_TTL["identity"]["device_memory"]
+        device_memory_seconds = REDIS_TTL["identity"]["screen_resolution_memory"]
 
         redis_client.sadd(redis_key, screen_resolution)
         touch(redis_key, device_memory_seconds)
 
         resolution_count = redis_client.scard(redis_key)
-        return resolution_count if resolution_count >= minimum_required_signals else 0
+        return resolution_count 
+        #if resolution_count >= minimum_required_signals else 0
 
     except Exception as err:
         logger.exception(
@@ -244,6 +286,12 @@ def build_language_flip_feature(context: Context) -> int:
     Builds AUTH-08 feature to detect language flips on success.
     """
     try:
+        if not context.authentication_type == 'login':
+            return 0
+            
+        if not THRESHOLDS["AUTH-08"]["enabled"]:
+          return 0
+
         if not context.success:
             return 0
 
@@ -251,7 +299,7 @@ def build_language_flip_feature(context: Context) -> int:
         if not current_language:
             return 0
 
-        minimum_language_changes = THRESHOLDS["AUTH-08"]["min_language_changes"]
+        #minimum_language_changes = THRESHOLDS["AUTH-08"]["min_language_changes"]
         language_memory_seconds = REDIS_TTL["identity"]["language_memory"]
 
         language_key = f"lang:user:{context.subject_id}"
@@ -267,7 +315,8 @@ def build_language_flip_feature(context: Context) -> int:
             touch(language_change_counter_key, language_memory_seconds)
 
         change_count = int(redis_client.get(language_change_counter_key) or 0)
-        return change_count if change_count >= minimum_language_changes else 0
+        return change_count 
+        #if change_count >= minimum_language_changes else 0
 
     except Exception as err:
         logger.exception(
@@ -279,13 +328,45 @@ def build_language_flip_feature(context: Context) -> int:
         raise RuntimeError(ErrorCode.REDIS_ERROR) from err
 
 
+#def build_odd_login_hour_feature(context: Context) -> int:
+#    try:
+#        if not context.authentication_type == 'login':
+#            return 0
+#            
+#        if not THRESHOLDS["AUTH-09"]["enabled"]:
+#          return 0
+#
+#        login_hour = context.event_time.hour + 5
+#        #print(login_hour)
+#        return 1 if login_hour < 6 or login_hour > 10 else 0
+#
+#    except Exception as err:
+#        logger.exception(
+#            "%s:AUTH_FEATURE_FAILURE rule=AUTH-09 subject_id=%s",
+#            ErrorCode.INTERNAL_ERROR,
+#            context.subject_id,
+#        )
+#        print(f"[ERROR] {ErrorCode.INTERNAL_ERROR}: AUTH-09 failure")
+#        raise RuntimeError(ErrorCode.INTERNAL_ERROR) from err
+
 def build_odd_login_hour_feature(context: Context) -> int:
-    """
-    Builds AUTH-09 feature to detect logins outside normal hours.
-    """
+
     try:
-        login_hour = context.event_time.hour
-        return 1 if login_hour < 6 or login_hour > 22 else 0
+        if context.authentication_type != 'login':
+            return 0
+            
+        if not THRESHOLDS["AUTH-09"]["enabled"]:
+            return 0
+
+        # Convert UTC ? IST properly
+        ist_time = context.event_time.astimezone(ZoneInfo("Asia/Kolkata"))
+
+        login_time = ist_time.time()
+
+        start = time(15, 0)  # 3:00 PM IST
+        end = time(16, 0)    # 4:00 PM IST
+
+        return 1 if start <= login_time <= end else 0
 
     except Exception as err:
         logger.exception(
@@ -293,7 +374,6 @@ def build_odd_login_hour_feature(context: Context) -> int:
             ErrorCode.INTERNAL_ERROR,
             context.subject_id,
         )
-        print(f"[ERROR] {ErrorCode.INTERNAL_ERROR}: AUTH-09 failure")
         raise RuntimeError(ErrorCode.INTERNAL_ERROR) from err
 
 

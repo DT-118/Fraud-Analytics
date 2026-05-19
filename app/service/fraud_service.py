@@ -8,7 +8,7 @@ from core.context import Context
 from core.errors import ErrorCode
 from core.logger import logger
 from features.auth_features import build_auth_features
-from features.auth_trust import record_recent_successful_authentication
+#from features.auth_trust import record_recent_successful_authentication
 from features.consent_features import build_consent_features
 from features.enroll_features import build_enroll_features
 from features.live_features import build_liveness_features
@@ -17,6 +17,9 @@ from rules.engine import load_rules, run_rules
 from scoring.engine import aggregate_score, classify_risk, load_scores
 from storage.decision_repo import insert_fraud_decision
 from storage.event_repo import insert_fraud_event
+
+# from service.splunk_service import send_to_splunk_async
+from service.log_builder import build_splunk_event
 
 # Rule paths
 AUTH_RULES_PATH = "rules/auth/rules.yaml"
@@ -55,11 +58,18 @@ def handle_fraud_event(
         # ---------------- Persist raw event ----------------
         insert_fraud_event(db_connection, event_context, source=source)
 
+        # ---------------- Send to Splunk (RAW EVENT) ----------------
+        # try:
+        #     splunk_event = build_splunk_event(event_context)
+        #     send_to_splunk_async(splunk_event)
+        # except Exception as e:
+        #     logger.error(f"[SPLUNK] Failed to send raw event: {str(e)}")
+
         # ---------------- Feature extraction ----------------
         if event_context.action_taxonomy == "login":
             auth_features = build_auth_features(event_context)
             live_features = build_liveness_features(event_context)
-            record_recent_successful_authentication(event_context)
+            #record_recent_successful_authentication(event_context)
 
             feature_values = {**auth_features, **live_features}
             rules_config = load_rules(AUTH_RULES_PATH)

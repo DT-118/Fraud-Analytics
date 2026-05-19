@@ -23,8 +23,6 @@ class SecurityPayload(BaseModel):
     geo_loc: Optional[str]  # country / region code (IN, US, etc.)
     timezone: Optional[str]  # client timezone
     user_agent: Optional[str]  # raw user-agent string
-    client_id: Optional[str]  # app / web / partner identifier
-    token_id: Optional[str]  # session / auth token id
     browser_name: Optional[str]  # parsed browser name
     os_version: Optional[str]  # OS version
     screen_resolution: Optional[str]  # screen resolution (e.g. 1920x1080)
@@ -46,15 +44,12 @@ class DocumentPayload(BaseModel):
 
 class ConsentPayload(BaseModel):
     consent_id: str  # unique consent identifier
-    scope: str  # scope being granted / used
     operation: str  # grant | use | revoke
-    allowed_scopes: Optional[List[str]]  # scopes allowed for use
 
 
 class WalletPayload(BaseModel):
     wallet_id: str  # wallet identifier
-    wallet_action: str  # sign / export_key / add_signer / rotate_key
-    is_critical: bool  # high-risk action flag
+    wallet_action: str  # provision | share
 
 
 class Context(BaseModel):
@@ -74,6 +69,7 @@ class Context(BaseModel):
     action_taxonomy: str  # login / enroll / consent / wallet
     event_time: datetime  # event timestamp (UTC)
     environment: str  # prod / staging / sandbox
+    authentication_type: str # login/wallet/consent
 
     # ---------------- PAYLOADS ----------------
     security_payload: SecurityPayload

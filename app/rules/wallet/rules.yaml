@@ -2,21 +2,73 @@ fraud_type: WALLET
 
 rules:
 
-  # Unusually high number of wallet signing operations in a short time window
+  # ---------------------------------------------------------
+  # WAL-01: Provision Velocity
+  # Detects how many documents a user provisions within
+  # a short time window.
+  # ---------------------------------------------------------
   WAL-01:
     enabled: true
-    feature: wallet_sign_velocity
+    feature: provision_count
     thresholds:
+      - min: 3
+        max: 3
+        weight: 25     # suspicious ? MEDIUM
+      - min: 4
+        max: 4
+        weight: 40     # elevated ? MEDIUM
       - min: 5
-        max: 9
-        weight: 30
-      - min: 10
-        weight: 60
+        max: 5
+        weight: 60     # high ? HIGH
+      - min: 6
+        max: 7
+        weight: 70     # very high ? HIGH
+      - min: 8
+        weight: 80     # extreme spike ? CRITICAL
 
-  # Critical wallet action performed without a recent successful authentication
+  # ---------------------------------------------------------
+  # WAL-02: Share Velocity
+  # Detects rapid sharing of documents.
+  # ---------------------------------------------------------
   WAL-02:
     enabled: true
-    feature: missing_recent_reauth
+    feature: share_count
+    thresholds:
+      - min: 3
+        max: 3
+        weight: 25     # suspicious ? MEDIUM
+      - min: 4
+        max: 4
+        weight: 40     # elevated ? MEDIUM
+      - min: 5
+        max: 5
+        weight: 60     # high ? HIGH
+      - min: 6
+        max: 7
+        weight: 70     # very high ? HIGH
+      - min: 8 
+        weight: 80     # extreme spike ? CRITICAL
+
+  # ---------------------------------------------------------
+  # WAL-03: Combined Burst
+  # combined_burst = min(provision_count, share_count)
+  # Detects coordinated rapid provision + sharing behavior.
+  # ---------------------------------------------------------
+  WAL-03:
+    enabled: true
+    feature: combined_burst
     thresholds:
       - min: 1
-        weight: 70
+        max: 1
+        weight: 15     # weak signal
+      - min: 2
+        max: 2
+        weight: 30     # medium risk
+      - min: 3
+        max: 3
+        weight: 45     # strong signal
+      - min: 4
+        max: 4
+        weight: 65     # high risk
+      - min: 5
+        weight: 80     # critical coordinated burst

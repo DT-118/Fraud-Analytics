@@ -11,12 +11,15 @@
 # ---------------------------------------------------------------------------
 
 AUTH-01:
-  min_failures: 3            # Minimum failed logins before feature activates
+  enabled: true
+  #min_failures: 3            # Minimum failed logins before feature activates
 
 AUTH-02:
-  min_subjects_per_ip: 3     # Distinct users failing from same IP
+  enabled: true
+  #min_subjects_per_ip: 3     # Distinct users failing from same IP
 
 AUTH-03:
+  enabled: true 
   min_failures_before_success: 3
                              # Failures required before success is suspicious
 
@@ -27,19 +30,24 @@ AUTH-05:
   enabled: true              # Track geo-location changes
 
 AUTH-06:
+  enabled: true
   min_failures: 2            # Browser downgrade evaluated only after failures
   min_browser_drop: 10       # Chrome major version downgrade threshold
 
 AUTH-07:
-  min_emulator_signals: 1    # Emulator / suspicious resolution signals
+  enabled: true
+  #min_emulator_signals: 1    # Emulator / suspicious resolution signals
 
 AUTH-08:
-  min_language_changes: 2    # Language changes before flagging
+  enabled: true
+  #min_language_changes: 2    # Language changes before flagging
 
 # AUTH-09:
 #   min_history_days: 3        # Baseline days required (future use)
 #   min_distinct_hours: 3      # Distinct login hours baseline
 
+AUTH-09:
+  enabled: true
 
 # ---------------------------------------------------------------------------
 # Liveness thresholds
@@ -58,15 +66,15 @@ LIVE-02:
 
 ENR-01:
   enabled: true              # Document verification failures
-  min_failures: 2            # Retry threshold before risk
+  #min_failures: 2            # Retry threshold before risk
 
 ENR-02:
   enabled: true              # Face vs document mismatch
-  min_mismatches: 2          # Allowed mismatches before risk
+  #min_mismatches: 2          # Allowed mismatches before risk
 
 ENR-03:
   enabled: true              # Same device enrolling multiple users
-  max_identities: 3          # Safe limit (family/shared device)
+  #max_identities: 3          # Safe limit (family/shared device)
 
 
 # ---------------------------------------------------------------------------
@@ -75,15 +83,18 @@ ENR-03:
 
 CONS-01:
   enabled: true              # Consent grant spike detection
-  min_grants: 5              # Grants allowed in window
+  #min_grants: 5              # Grants allowed in window
 
-CONS-02:
-  enabled: true              # Consent scope violation detection
 
 
 # ---------------------------------------------------------------------------
 # Wallet thresholds
 # ---------------------------------------------------------------------------
 
+WAL-01:
+  enabled: true
+  #min_provisions: 5          # Provision velocity threshold
+
 WAL-02:
-  max_reauth_age_seconds: 300  # Critical wallet action requires re-auth (5 mins)
+  enabled: true
+  #min_shares: 5              # share velocity threshold

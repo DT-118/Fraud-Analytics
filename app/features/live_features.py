@@ -12,7 +12,14 @@ def build_live01_spoof_feature(context: Context) -> int:
     liveness spoof detections within a short window.
     """
     try:
+        if not context.authentication_type=="login":
+            return 0
+            
         if not THRESHOLDS["LIVE-01"]["enabled"]:
+#            print("khgjyegf")
+            return 0
+            
+        if not context.biometric_payload.liveness_required:
             return 0
 
         biometric_payload = context.biometric_payload
@@ -43,6 +50,9 @@ def build_live02_missing_liveness_feature(context: Context) -> int:
     verification was required but not provided.
     """
     try:
+        if not context.authentication_type == "login":
+            return 0
+            
         if not THRESHOLDS["LIVE-02"]["enabled"]:
             return 0
 

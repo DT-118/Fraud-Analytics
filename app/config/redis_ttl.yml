@@ -22,9 +22,6 @@ auth:
   ip_fail_window: 900       # AUTH-02
                             # IP-based brute force detection window (15 minutes)
 
-  reauth_memory: 3600       # WAL-02
-                            # Trust memory for recent successful authentication (1 hour)
-
 
 # ---------------------------------------------------------------------------
 # Identity & device behavior memory
@@ -35,9 +32,15 @@ identity:
 
   geo_memory: 2592000       # AUTH-05
                             # Geo-location history retention (30 days)
+                            
+  browser_memory: 86400         # 1 day
+                                 # Browser baseline memory
 
-  language_memory: 2592000  # AUTH-08
-                            # Language baseline & flip tracking (30 days)
+  screen_resolution_memory: 86400  # 1 day
+                                   # Environment consistency check
+
+  language_memory: 2592000      # 30 days
+                                 # Long-term behavior drift
 
 
 # ---------------------------------------------------------------------------
@@ -52,8 +55,8 @@ behavior:
 # Biometric / liveness checks
 # ---------------------------------------------------------------------------
 liveness:
-  attempt_window: 300       # LIVE-01
-                            # Liveness spoof detection window (5 minutes)
+  attempt_window: 600       # LIVE-01
+                            # Liveness spoof detection window (10 minutes)
 
 
 # ---------------------------------------------------------------------------
@@ -66,21 +69,21 @@ enroll:
   bio_mismatch_window: 900  # ENR-02
                             # Face vs document mismatch window (15 minutes)
 
-  device_identity_window: 900  # ENR-03
-                               # Multiple identities from same device window (15 minutes)
+  device_identity_window: 1200  # ENR-03
+                               # Multiple identities from same device window (20 minutes)
 
 
 # ---------------------------------------------------------------------------
 # Consent activity tracking
 # ---------------------------------------------------------------------------
 consent:
-  grant_window: 1800        # CONS-01
-                            # Consent grant spike detection window (30 minutes)
+  grant_window: 300        # CONS-01
+                            # Consent grant spike detection window (5 minutes)
 
 
 # ---------------------------------------------------------------------------
 # Wallet activity tracking
 # ---------------------------------------------------------------------------
 wallet:
-  sign_window: 60           # WAL-01
-                            # Wallet signing velocity window (60 seconds)
+  provision_window: 300           # WAL-01 (wallet provisioning velocity)(5 minutes)
+  share_window: 300               # WAL-02 (wallet sharing velocity)(5 minutes)

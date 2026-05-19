@@ -29,9 +29,10 @@ def build_enr01_document_fail_feature(context: Context) -> int:
         touch(redis_key, failure_window_seconds)
 
         failure_count = int(redis_client.get(redis_key) or 0)
-        minimum_failures = THRESHOLDS["ENR-01"]["min_failures"]
+        #minimum_failures = THRESHOLDS["ENR-01"]["min_failures"]
 
-        return failure_count if failure_count >= minimum_failures else 0
+        return failure_count 
+        #if failure_count >= minimum_failures else 0
 
     except Exception as err:
         logger.exception(
@@ -53,6 +54,10 @@ def build_enr02_face_doc_mismatch_feature(context: Context) -> int:
             return 0
 
         document_payload = context.document_payload
+        
+        if not document_payload.document_scan_passed:
+            return 0
+        
         if not document_payload:
             return 0
 
@@ -66,9 +71,10 @@ def build_enr02_face_doc_mismatch_feature(context: Context) -> int:
         touch(redis_key, mismatch_window_seconds)
 
         mismatch_count = int(redis_client.get(redis_key) or 0)
-        minimum_mismatches = THRESHOLDS["ENR-02"]["min_mismatches"]
+        #minimum_mismatches = THRESHOLDS["ENR-02"]["min_mismatches"]
 
-        return mismatch_count if mismatch_count >= minimum_mismatches else 0
+        return mismatch_count 
+        #if mismatch_count >= minimum_mismatches else 0
 
     except Exception as err:
         logger.exception(
@@ -100,12 +106,12 @@ def build_enr03_duplicate_device_enroll_feature(context: Context) -> int:
         touch(redis_key, identity_window_seconds)
 
         distinct_subject_count = redis_client.scard(redis_key)
-        max_allowed_identities = THRESHOLDS["ENR-03"]["max_identities"]
+        #max_allowed_identities = THRESHOLDS["ENR-03"]["max_identities"]
 
         return (
             distinct_subject_count
-            if distinct_subject_count > max_allowed_identities
-            else 0
+#            if distinct_subject_count > max_allowed_identities
+#            else 0
         )
 
     except Exception as err:
@@ -126,5 +132,5 @@ def build_enroll_features(context: Context) -> dict:
     return {
         "document_failures": build_enr01_document_fail_feature(context),
         "face_doc_mismatch": build_enr02_face_doc_mismatch_feature(context),
-        "duplicate_device_enroll": build_enr03_duplicate_device_enroll_feature(context),
+        "device_enroll_count": build_enr03_duplicate_device_enroll_feature(context),
     }
