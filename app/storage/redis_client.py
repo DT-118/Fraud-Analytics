@@ -1,67 +1,72 @@
+from dotenv import load_dotenv
+load_dotenv()
 import os
+import threading
+
 import redis
+
 from core.errors import ErrorCode
 from core.logger import logger
 
-
-# Option 1: Use full Redis connection string (recommended for production)
-#REDIS_URL = os.getenv("REDIS_URL","redis://:dtmytrust@#12345@84.46.255.66:5370/0")
-
-REDIS_URL = os.getenv(
-    "REDIS_URL",
-    None
-)
-
-
-# Option 2: Fallback to individual parameters (for local dev)
-REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
-REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
+REDIS_URL      = os.getenv("REDIS_URL", None)
+REDIS_HOST     = os.getenv("REDIS_HOST", "localhost")
+REDIS_PORT     = int(os.getenv("REDIS_PORT", 6379))
 REDIS_DB_INDEX = int(os.getenv("REDIS_DB", 0))
 REDIS_PASSWORD = os.getenv("REDIS_PASSWORD", None)
 
 
-def get_redis_client():
+def _build_client() -> redis.Redis:
+    if REDIS_URL:
+        return redis.from_url(
+            REDIS_URL,
+            socket_connect_timeout=2,
+            socket_timeout=2,
+            decode_responses=True,
+        )
+    return redis.Redis(
+        host=REDIS_HOST,
+        port=REDIS_PORT,
+        db=REDIS_DB_INDEX,
+        password=REDIS_PASSWORD,
+        socket_connect_timeout=2,
+        socket_timeout=2,
+        decode_responses=True,
+    )
+
+
+class _LazyRedisClient:
     """
-    Initialize and return a Redis client instance.
+    Lazily initializes the Redis connection on first use.
 
-    Performs a health check (PING) to ensure Redis connectivity
-    before returning the client.
+    Importing this module at startup never fails even if Redis is down.
+    The first actual Redis command triggers the connection attempt.
+    Double-checked locking prevents two threads from both creating clients
+    if they race on the first call.
     """
-    try:
-        logger.info("Initializing Redis client")
-        print("[REDIS] Connecting to Redis")
 
-        # If full connection URL is provided
-        if REDIS_URL:
-            client = redis.from_url(
-                REDIS_URL,
-                socket_connect_timeout=2,
-                socket_timeout=2,
-                decode_responses=True,
-            )
-        else:
-            # Fallback to manual configuration
-            client = redis.Redis(
-                host=REDIS_HOST,
-                port=REDIS_PORT,
-                db=REDIS_DB_INDEX,
-                password=REDIS_PASSWORD,
-                socket_connect_timeout=2,
-                socket_timeout=2,
-                decode_responses=True,
-            )
+    def __init__(self):
+        self._client: redis.Redis | None = None
+        self._lock = threading.Lock()
 
-        # Health check
-        client.ping()
-        print("[REDIS] Connected successfully")
+    def _get_client(self) -> redis.Redis:
+        # Fast path — no lock once connected
+        if self._client is not None:
+            return self._client
+        with self._lock:
+            # Double-check: another thread may have connected while we waited
+            if self._client is None:
+                try:
+                    client = _build_client()
+                    client.ping()
+                    self._client = client
+                    logger.info("[REDIS] Connected")
+                except Exception as exc:
+                    logger.warning("[REDIS] Connection failed: %s", exc)
+                    raise RuntimeError(ErrorCode.REDIS_ERROR) from exc
+        return self._client
 
-        return client
-
-    except Exception as exc:
-        logger.exception("FE-502:REDIS_CONNECTION_FAILED")
-        print("[REDIS ERROR] Redis connection failed:", exc)
-        raise RuntimeError(ErrorCode.REDIS_ERROR) from exc
+    def __getattr__(self, name: str):
+        return getattr(self._get_client(), name)
 
 
-# Singleton Redis client
-redis_client = get_redis_client()
+redis_client = _LazyRedisClient()

@@ -1,0 +1,25 @@
+# =============================================================================
+# Exception Code Amplifiers
+# =============================================================================
+# Caller-reported anomaly codes that amplify the fraud score.
+# Format: exception_code: multiplier (applied to raw_score before capping at 100)
+#
+# Codes are namespaced by service prefix (AUTH_EX_, ENR_EX_, WAL_EX_) so they
+# remain unique as new services are onboarded.
+#
+# When to increase a multiplier:
+#   A code that reliably precedes confirmed fraud should be amplified higher.
+#   Review quarterly against confirmed-fraud case data.
+#
+# When to add a new code:
+#   Calling services register a new exception code via the API team.
+#   Add it here immediately so the fraud engine amplifies it from day one.
+# =============================================================================
+
+AUTH_EX_005: 1.5    # biometric verification failed — high signal
+AUTH_EX_006: 1.3    # device not recognized by caller
+AUTH_EX_007: 1.4    # passport scan failed — visitor document auth
+AUTH_EX_008: 1.5    # visa status invalid — visitor entitlement check
+ENR_EX_002:  1.4    # face-to-document match failed
+ENR_EX_003:  1.3    # liveness check failed
+WAL_EX_002:  1.3    # wallet sharing unauthorized

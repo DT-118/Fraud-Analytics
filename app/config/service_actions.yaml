@@ -1,0 +1,81 @@
+# =============================================================================
+# SERVICE ACTION PLAYBOOK
+# =============================================================================
+# Maps (service, risk_band) → enforcement action.
+#
+# Actions:
+#   ALLOW    — proceed normally
+#   MONITOR  — proceed, log for passive review
+#   FLAG     — proceed, create analyst case
+#   STEP_UP  — require additional challenge (OTP / biometric)
+#   BLOCK    — deny the request
+#
+# Conditional overrides (evaluated before the default band action):
+#   if_cross_service_flagged: override action when the subject's identity
+#     profile already carries a cross-service fraud flag from a prior event.
+#     Applied only to bands that would otherwise ALLOW or STEP_UP — BLOCK
+#     can never be softened by this mechanism.
+#
+# Design rule (0.001% false positive budget):
+#   No single rule produces BLOCK on its own.
+#   CRITICAL requires score >= 80 (2+ high-weight signals simultaneously).
+# =============================================================================
+
+AUTH:
+  NORISK:
+    default: ALLOW
+  LOW:
+    default: ALLOW
+    if_cross_service_flagged: STEP_UP   # already flagged elsewhere → challenge
+  MEDIUM:
+    default: STEP_UP
+    if_cross_service_flagged: BLOCK     # flagged + moderate risk → hard stop
+  HIGH:
+    default: STEP_UP
+    if_cross_service_flagged: BLOCK
+  CRITICAL:
+    default: BLOCK
+
+ENROLL:
+  NORISK:
+    default: ALLOW
+  LOW:
+    default: ALLOW
+    if_cross_service_flagged: FLAG
+  MEDIUM:
+    default: FLAG                       # document anomaly → allow + create case
+    if_cross_service_flagged: BLOCK
+  HIGH:
+    default: STEP_UP                    # strong anomaly → re-verify
+    if_cross_service_flagged: BLOCK
+  CRITICAL:
+    default: BLOCK
+
+CONSENT:
+  NORISK:
+    default: ALLOW
+  LOW:
+    default: ALLOW
+    if_cross_service_flagged: FLAG
+  MEDIUM:
+    default: FLAG
+    if_cross_service_flagged: STEP_UP
+  HIGH:
+    default: FLAG                       # consent is lower financial risk → flag, not block
+    if_cross_service_flagged: BLOCK
+  CRITICAL:
+    default: BLOCK
+
+WALLET:
+  NORISK:
+    default: ALLOW
+  LOW:
+    default: MONITOR                    # wallet is financial — even LOW is watched
+    if_cross_service_flagged: STEP_UP
+  MEDIUM:
+    default: STEP_UP
+    if_cross_service_flagged: BLOCK
+  HIGH:
+    default: BLOCK
+  CRITICAL:
+    default: BLOCK

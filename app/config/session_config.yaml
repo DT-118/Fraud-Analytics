@@ -1,0 +1,28 @@
+# =============================================================================
+# Session Configuration — Per-Service
+# =============================================================================
+# session_ttl_seconds: how long session state is retained in Redis.
+#   AUTH    — 30 min.  Login sessions are short by design.
+#   WALLET  — 2 hours. Wallet workflows (provision → share) can span time.
+#   ENROLL  — 1 hour.  Enrollment can take a while if documents are involved.
+#   CONSENT — 1 hour.
+#
+# max_scores_stored: rolling window of event scores kept in session JSON.
+#   Capped to avoid unbounded growth for long-running sessions.
+#
+# suspicious_score_threshold: score at or above which an event counts as
+#   "suspicious" for session amplifier logic.
+#   Overrides the value in thresholds.yml SESSION block if set here.
+#   30 = bottom of MEDIUM band — any non-trivial risk counts.
+# =============================================================================
+
+session_ttl_seconds:
+  AUTH:    1800
+  ENROLL:  3600
+  WALLET:  7200
+  CONSENT: 3600
+  default: 3600
+
+max_scores_stored: 20
+
+suspicious_score_threshold: 30

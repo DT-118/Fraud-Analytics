@@ -1,0 +1,56 @@
+# =============================================================================
+# Cross-Service Fraud Patterns
+# =============================================================================
+# Defines temporal relationships between service risk events that indicate
+# coordinated fraud.  Evaluated after each event's profile is updated.
+#
+# Fields:
+#   trigger_service:      The service that must have fired recently.
+#   trigger_risk_levels:  Risk levels of the trigger event that count.
+#   target_service:       The current service being scored.
+#   window_minutes:       How recently the trigger must have fired.
+#   reason:               Key logged and stored in cross_service_flag_reason.
+#
+# Pattern logic (bidirectional — checked in both directions):
+#   - Is the current event the TARGET of an earlier suspicious TRIGGER event?
+#   - Is the current event the TRIGGER for a recent TARGET event?
+#
+# Order matters only for human readability — all patterns are evaluated.
+# =============================================================================
+
+patterns:
+
+  # Account takeover: fail to log in, then immediately try to provision wallet
+  - trigger_service:      AUTH
+    trigger_risk_levels:  [HIGH, CRITICAL]
+    target_service:       WALLET
+    window_minutes:       30
+    reason:               HIGH_AUTH_BEFORE_WALLET_30MIN
+
+  # Synthetic identity: enroll new identity, then authenticate immediately
+  - trigger_service:      ENROLL
+    trigger_risk_levels:  [HIGH, CRITICAL]
+    target_service:       AUTH
+    window_minutes:       60
+    reason:               HIGH_ENROLL_BEFORE_AUTH_60MIN
+
+  # Consent harvesting: compromised auth followed by mass consent grants
+  - trigger_service:      AUTH
+    trigger_risk_levels:  [CRITICAL]
+    target_service:       CONSENT
+    window_minutes:       60
+    reason:               CRITICAL_AUTH_BEFORE_CONSENT_60MIN
+
+  # Money mule: wallet activity followed by re-enrollment on same device
+  - trigger_service:      WALLET
+    trigger_risk_levels:  [HIGH, CRITICAL]
+    target_service:       ENROLL
+    window_minutes:       120
+    reason:               HIGH_WALLET_BEFORE_ENROLL_120MIN
+
+  # Rapid consent → wallet: grant data access then immediately monetize
+  - trigger_service:      CONSENT
+    trigger_risk_levels:  [HIGH, CRITICAL]
+    target_service:       WALLET
+    window_minutes:       15
+    reason:               HIGH_CONSENT_BEFORE_WALLET_15MIN

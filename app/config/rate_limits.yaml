@@ -1,0 +1,24 @@
+# =============================================================================
+# Per-Service Rate Limits
+# =============================================================================
+# rpm (requests per minute) per API key per service.
+#
+# AUTH receives the highest volume — every citizen login passes through it.
+# WALLET and ENROLL are financial/identity-critical — lower limits prevent
+# automated stuffing even if an API key is compromised.
+#
+# default: applied when a request cannot be mapped to a known service
+#   (e.g., malformed payloads, unknown action_taxonomy).
+#
+# global: applied regardless of service — hard ceiling across all requests
+#   from a single API key, preventing one key from monopolizing capacity.
+# =============================================================================
+
+global: 2000
+
+per_service:
+  AUTH:    1200
+  ENROLL:  300
+  WALLET:  600
+  CONSENT: 600
+  default: 600

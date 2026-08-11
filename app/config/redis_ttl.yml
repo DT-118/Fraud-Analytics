@@ -22,6 +22,8 @@ auth:
   ip_fail_window: 900       # AUTH-02
                             # IP-based brute force detection window (15 minutes)
 
+  success_window: 300       # AUTH-10 — rapid success velocity (5 minutes)
+
 
 # ---------------------------------------------------------------------------
 # Identity & device behavior memory

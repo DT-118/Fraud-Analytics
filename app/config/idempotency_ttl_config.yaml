@@ -1,0 +1,22 @@
+# =============================================================================
+# Per-Service Idempotency TTL
+# =============================================================================
+# How long an event_id is remembered in Redis to prevent duplicate processing.
+#
+# The TTL must be longer than the worst-case Kafka redelivery window for
+# that service.  Default Kafka retention for at-least-once delivery is ~24h
+# for most services, but financial services (WALLET) warrant a longer window
+# to catch delayed retries from upstream services under maintenance.
+#
+# AUTH:    24h — login retries happen within minutes, not days
+# ENROLL:  24h — enrollment retries are same-day
+# WALLET:  7 days — wallet ops can be retried by batch reconciliation jobs
+# CONSENT: 48h — consent operations may be retried by overnight batch
+# =============================================================================
+
+ttl_seconds:
+  AUTH:    86400      # 24 hours
+  ENROLL:  86400      # 24 hours
+  WALLET:  604800     # 7 days
+  CONSENT: 172800     # 48 hours
+  default: 86400      # 24 hours fallback

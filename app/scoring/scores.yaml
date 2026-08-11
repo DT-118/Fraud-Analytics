@@ -1,8 +1,11 @@
 # Score → risk level
+# Bands are mutually exclusive — no score falls in two bands.
+# NORISK requires score = 0 exactly (no rules triggered at all).
+# Evaluated in order: first match wins.
 risk_bands:
-  NORISK: [0, 1]
-  LOW: [1, 29]
-  MEDIUM: [30, 59]
-  HIGH: [60, 79]
-  CRITICAL: [80, 100]
+  NORISK:   [0,   0]    # No rules triggered
+  LOW:      [1,   29]   # Weak signals — monitor only
+  MEDIUM:   [30,  59]   # Moderate risk — step-up or flag
+  HIGH:     [60,  79]   # Strong risk — step-up required
+  CRITICAL: [80, 100]   # Block-level risk
 

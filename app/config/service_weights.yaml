@@ -1,0 +1,20 @@
+# =============================================================================
+# Service Weights — Composite Identity Score
+# =============================================================================
+# Defines how each service's rolling risk score contributes to the composite
+# identity risk profile.  Must sum to 1.0.
+#
+# AUTH is weighted highest because login is the primary attack surface and
+# the most frequent interaction.  CONSENT is lowest because consent grants
+# rarely carry direct financial risk on their own.
+#
+# cross_service_bonus: flat points added when cross-service fraud pattern fires.
+# =============================================================================
+
+composite_weights:
+  AUTH:    0.40
+  ENROLL:  0.25
+  WALLET:  0.25
+  CONSENT: 0.10
+
+cross_service_bonus: 15

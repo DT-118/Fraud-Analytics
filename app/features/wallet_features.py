@@ -30,9 +30,13 @@ def build_wallet_velocity_features(context: Context) -> dict:
         share_count = 0
         combined_burst = 0
 
+        wallet_payload = context.wallet_payload
+        if not wallet_payload:
+            return {"provision_count": 0, "share_count": 0, "combined_burst": 0}
+
         # Provision velocity
         if provision_enabled:
-            if context.wallet_payload.wallet_action == "provision":
+            if wallet_payload.wallet_action == "provision":
                 provision_count = redis_client.incr(provision_key)
                 touch(provision_key, provision_window_seconds)
             else:
@@ -40,7 +44,7 @@ def build_wallet_velocity_features(context: Context) -> dict:
 
         # Share velocity
         if share_enabled:
-            if context.wallet_payload.wallet_action == "share":
+            if wallet_payload.wallet_action == "share":
                 share_count = redis_client.incr(share_key)
                 touch(share_key, share_window_seconds)
             else:

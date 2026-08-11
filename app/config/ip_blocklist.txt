@@ -1,0 +1,9 @@
+# IP Blocklist — managed by fraud operations team
+# Format: one IP per line. Lines starting with # are ignored.
+# Add known Tor exits, datacenter IPs, and confirmed fraud IPs here.
+# Changes take effect on next service restart or via flag_ip() at runtime.
+
+# Example entries (replace with real threat intelligence):
+# 192.0.2.1       # Tor exit node
+# 198.51.100.42   # Known credential stuffing origin
+# 203.0.113.99    # Datacenter proxy — confirmed fraud source

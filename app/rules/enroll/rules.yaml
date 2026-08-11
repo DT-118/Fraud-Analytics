@@ -43,3 +43,74 @@ rules:
         weight: 50
       - min: 5
         weight: 70
+
+  # Device used by multiple distinct subjects — shared/fraud device
+  DEVICE-01:
+    enabled: true
+    feature: device_subject_count
+    thresholds:
+      - min: 8
+        max: 14
+        weight: 40     # suspicious — device used by 5–14 subjects
+      - min: 15
+        weight: 70     # confirmed fraud device — 15+ subjects
+
+  # Source IP is on the flagged blocklist (Tor exit, datacenter, known bad)
+  IP-01:
+    enabled: true
+    feature: ip_is_flagged
+    thresholds:
+      - min: 1
+        weight: 50
+
+  # User's current geo_loc is outside UAE territory — policy block
+  GEO-01:
+    enabled: true
+    feature: is_outside_uae
+    thresholds:
+      - min: 1
+        weight: 80
+
+  # Behavioral deviation from personal baseline (Phase 5)
+  BASELINE-01:
+    enabled: true
+    feature: deviation_score
+    thresholds:
+      - min: 50
+        max: 74
+        weight: 20
+      - min: 75
+        max: 89
+        weight: 40
+      - min: 90
+        weight: 60
+
+
+# ---------------------------------------------------------------------------
+# Rule chains — Phase 4 Decision Intelligence
+# ---------------------------------------------------------------------------
+chains:
+
+  # Document failures from a shared device = organized identity fraud ring
+  - trigger_rules: ["DEVICE-01"]
+    target_rule: "ENR-01"
+    weight_multiplier: 1.5
+    reason: "SHARED_DEVICE_DOC_FAILURES"
+
+  # Flagged IP + face-doc mismatch = impersonation from known-bad actor
+  - trigger_rules: ["IP-01"]
+    target_rule: "ENR-02"
+    weight_multiplier: 1.6
+    reason: "FLAGGED_IP_FACE_MISMATCH"
+
+  # Flagged IP + shared device = coordinated multi-identity enrollment fraud
+  - trigger_rules: ["IP-01", "DEVICE-01"]
+    target_rule: "ENR-03"
+    weight_multiplier: 1.5
+    reason: "FLAGGED_IP_SHARED_DEVICE_ENROLL"
+
+  # Behavioral deviation + document failures = anomalous failure rate for this user
+  - trigger_rules: ["BASELINE-01"]
+    target_rule: "ENR-01"
+    weight_multiplier: 1.3
+    reason: "BASELINE_DEVIATION_DOC_FAILURES"

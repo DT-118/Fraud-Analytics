@@ -13,3 +13,6 @@ typing_extensions
 typing-inspection  
 urllib3            
 uvicorn            
+bcrypt
+PyJWT
+python-dotenv

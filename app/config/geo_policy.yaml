@@ -1,0 +1,41 @@
+# =============================================================================
+# Per-Service Geo Policy
+# =============================================================================
+# Defines which geographic location prefixes are considered "allowed" per service.
+#
+# allowed_prefixes: list of geo_loc prefixes treated as inside the allowed zone.
+#   The feature `is_outside_uae` = 0 when geo_loc starts with any of these.
+#   Default ["AE"] means only UAE locations are allowed.
+#
+# action_outside: what happens when geo_loc is outside allowed_prefixes.
+#   "block"  — is_outside_uae = 1 (GEO-01 fires at weight 80 → CRITICAL → BLOCK)
+#   "stepup" — is_outside_uae_soft = 1 instead; a softer rule fires (future)
+#   Currently only "block" is implemented; "stepup" is reserved.
+#
+# ENROLL use case: citizens can enroll at UAE embassies in GB, US, DE, IN.
+#   These offices present physical documents in-person so the geographic risk
+#   is lower than a remote anonymous access.
+#
+# CONSENT: lower financial risk — future ops team may permit overseas consent.
+#   Currently still "block"; change to "stepup" when approved by policy team.
+# =============================================================================
+
+default:
+  allowed_prefixes: ["AE"]
+  action_outside: block
+
+AUTH:
+  allowed_prefixes: ["AE"]
+  action_outside: block
+
+ENROLL:
+  allowed_prefixes: ["AE", "GB", "US", "DE", "IN", "FR", "SA", "PK"]
+  action_outside: block
+
+WALLET:
+  allowed_prefixes: ["AE"]
+  action_outside: block
+
+CONSENT:
+  allowed_prefixes: ["AE"]
+  action_outside: block
