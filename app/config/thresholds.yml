@@ -1,109 +1,55 @@
-# ============================================================
-# Thresholds Configuration
-# ------------------------------------------------------------
-# Purpose:
-# - Controls FEATURE behavior (not scoring)
-# - Decides when Redis counters are incremented
-# - Decides when a feature becomes "active"
-# ============================================================
+# Feature-behavior thresholds.
+#
+# This file controls feature extraction behavior, not rule weights.
+# It defines when feature counters activate and what supporting values the
+# feature layer uses.
+#
+# Rule IDs are meaningful, stable identifiers. They must match the IDs in
+# config/rules/*.yaml and must never be reused for a different rule.
+#
+# Keep feature thresholds separate from scoring thresholds so changing a
+# feature's detection window does not silently change its score weight.
 
-# ---------------------------------------------------------------------------
-# Authentication thresholds
-# ---------------------------------------------------------------------------
-
-AUTH-01:
-  enabled: true
-
-AUTH-02:
-  enabled: true
-
-AUTH-03:
-  enabled: true
+# Authentication: number of failures required before a successful authentication is
+# considered a success-after-failure event.
+AUTH_SUCCESS_AFTER_FAILURES:
   min_failures_before_success: 3
 
-AUTH-04:
-  enabled: true
-
-AUTH-05:
-  enabled: true
-
-AUTH-06:
-  enabled: true
+# Authentication: browser downgrade detection.
+# `min_failures` prevents a browser downgrade from being scored without a
+# preceding failure pattern.
+# `min_browser_drop` is per browser family so validated browser-specific
+# thresholds can be introduced without changing feature code.
+AUTH_BROWSER_DOWNGRADE:
   min_failures: 2
-  min_browser_drop: 10
+  min_browser_drop:
+    default: 10
+    CHROME: 10
+    EDGE: 10
+    FIREFOX: 10
+    SAFARI: 10
 
-AUTH-07:
-  enabled: true
+# Authentication: language-change counting for AUTH_LANGUAGE_FLIP.
+# Only changes inside this sliding window are counted. The last-seen language
+# itself is remembered longer (redis_ttl.yml -> identity.language_memory).
+AUTH_LANGUAGE_FLIP:
+  flip_window_seconds: 86400  # 86400 seconds = 24 hours
 
-AUTH-08:
-  enabled: true
+# Configured off-hours window (generic — AUTH/LOGIN/CONSENT/WALLET).
+# The feature evaluates event_time in Asia/Kolkata.
+ODD_HOUR_ACTIVITY:
+  odd_hour_start: 0  # 00:00 IST
+  odd_hour_end: 4    # 04:00 IST
 
-AUTH-09:
-  enabled: true
-  odd_hour_start: 0    
-  odd_hour_end: 4      
+# Device: number of distinct devices allowed before a new-device event
+# becomes a fraud signal. The allowance is shared across services.
+DEVICE_NEW_DEVICE_ALLOWANCE:
+  free_device_allowance: 3
 
-AUTH-10:
-  enabled: true
+# Device: time window used when measuring rapid new-device switching.
+DEVICE_SWITCH_VELOCITY:
+  velocity_window_seconds: 60  # 60 seconds = 1 minute
 
-# ---------------------------------------------------------------------------
-# Liveness thresholds
-# ---------------------------------------------------------------------------
-
-LIVE-01:
-  enabled: true
-
-LIVE-02:
-  enabled: true
-
-
-# ---------------------------------------------------------------------------
-# Enrollment thresholds
-# ---------------------------------------------------------------------------
-
-ENR-01:
-  enabled: true
-
-ENR-02:
-  enabled: true
-
-ENR-03:
-  enabled: true
-
-
-# ---------------------------------------------------------------------------
-# Consent thresholds
-# ---------------------------------------------------------------------------
-
-CONS-01:
-  enabled: true
-
-
-# ---------------------------------------------------------------------------
-# Wallet thresholds
-# ---------------------------------------------------------------------------
-
-WAL-01:
-  enabled: true
-
-WAL-02:
-  enabled: true
-
-WAL-03:
-  enabled: true
-
-
-# ---------------------------------------------------------------------------
-# Session thresholds
-# ---------------------------------------------------------------------------
-
-SESSION:
-  suspicious_score_threshold: 30
-
-
-# ---------------------------------------------------------------------------
-# Device thresholds
-# ---------------------------------------------------------------------------
-
-DEVICE-01:
-  enabled: true
+# Geo: time window used when measuring repeated location changes.
+GEO_VELOCITY:
+  velocity_window_seconds: 300  # 300 seconds = 5 minutes

@@ -1,22 +1,29 @@
-# =============================================================================
-# Per-Service Idempotency TTL
-# =============================================================================
-# How long an event_id is remembered in Redis to prevent duplicate processing.
+# Per-service idempotency retention.
 #
-# The TTL must be longer than the worst-case Kafka redelivery window for
-# that service.  Default Kafka retention for at-least-once delivery is ~24h
-# for most services, but financial services (WALLET) warrant a longer window
-# to catch delayed retries from upstream services under maintenance.
+# The fraud engine stores event IDs in Redis with these TTLs to prevent
+# duplicate processing during Kafka redelivery and upstream retries.
 #
-# AUTH:    24h — login retries happen within minutes, not days
-# ENROLL:  24h — enrollment retries are same-day
-# WALLET:  7 days — wallet ops can be retried by batch reconciliation jobs
-# CONSENT: 48h — consent operations may be retried by overnight batch
-# =============================================================================
+# TTLs should cover the expected duplicate/retry window for each service.
+# The durable fraud_decisions.event_id unique constraint remains the final
+# database-level duplicate safeguard when Redis is unavailable.
+#
+# Rule:
+#   Never reduce a TTL below the maximum retry/redelivery window without
+#   reviewing duplicate-processing behavior for that service.
 
 ttl_seconds:
-  AUTH:    86400      # 24 hours
-  ENROLL:  86400      # 24 hours
-  WALLET:  604800     # 7 days
-  CONSENT: 172800     # 48 hours
-  default: 86400      # 24 hours fallback
+
+  # Authentication retries are normally short-lived; retain duplicates for 24h.
+  AUTH: 86400
+
+  # Login retries are expected within the same day; retain for 24h.
+  LOGIN: 86400
+
+  # Wallet reconciliation can retry days later; retain for 7 days.
+  WALLET: 604800
+
+  # Consent batch/overnight retries may arrive later; retain for 48h.
+  CONSENT: 172800
+
+  # Safe fallback for an unknown or missing service mapping.
+  default: 86400

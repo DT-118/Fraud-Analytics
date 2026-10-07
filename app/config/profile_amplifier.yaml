@@ -1,0 +1,7 @@
+enabled: true
+band_factors:
+  NORISK: 1.0
+  LOW: 1.0
+  MEDIUM: 1.15
+  HIGH: 1.35
+  CRITICAL: 1.6

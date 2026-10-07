@@ -1,30 +1,76 @@
+[build-system]
+requires = ["setuptools>=65.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fraud-detection-engine"
+version = "1.0.0"
+description = "Real-time fraud scoring engine with rule-based decision logic and dynamic risk profiling"
+authors = [
+    {name = "Fraud Detection Team", email = "fraud-team@company.com"}
+]
+license = {text = "Proprietary"}
+requires-python = ">=3.10"
+keywords = ["fraud", "detection", "risk-scoring", "rule-engine"]
+dynamic = ["dependencies"]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0", "pytest-cov>=4.0", "black>=22.0", "mypy>=0.990"]
+test = ["pytest>=7.0", "pytest-asyncio>=0.20.0"]
+
+[tool.setuptools]
+packages = ["core", "features", "rules", "scoring", "service", "storage"]
+py-modules = [
+    "api",
+    "admin_api",
+    "dashboard_api",
+    "profile_api",
+    "portal_auth_api",
+    "action_storing_api",
+]
+
+[tool.setuptools.dynamic]
+dependencies = { file = ["requirements.txt"] }
+
 [tool.black]
 line-length = 88
-target-version = ["py38"]
-
+target-version = ["py310"]
 
 [tool.ruff]
-target-version = "py38"
+target-version = "py310"
 line-length = 88
+exclude = [
+    ".venv",
+    "__pycache__",
+    ".git",
+    "build",
+    "dist",
+]
 
 [tool.ruff.lint]
-select = ["E", "F", "B", "I", "UP"]
-ignore = ["E501"]
-
-
 select = [
-  "E",   # PEP8 errors
-  "F",   # Pyflakes (real bugs)
-  "B",   # Bugbear
-  "I",   # Import sorting
-  "UP",  # Python upgrades
+    "E",      # PEP8 errors
+    "F",      # Pyflakes (real bugs)
+    "B",      # Bugbear (common mistakes)
+    "I",      # Import sorting
+    "UP",     # Python upgrades
+    "W",      # Warnings
 ]
-
 ignore = [
-  "E501",  # Line length (Black handles this)
+    "E501",   # Line length (Black handles this)
+    "W503",   # Line break before binary operator
 ]
 
-exclude = [
-  ".venv",
-  "__pycache__",
-]
+[tool.isort]
+profile = "black"
+line_length = 88
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false  # Gradual typing adoption
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"

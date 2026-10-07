@@ -1,7 +1,3 @@
-
-
-
-
 """
 dashboard_api.py
 
@@ -18,8 +14,7 @@ Sections:
   IP & Device           GET /fraud/threats/summary
   Sessions              GET /fraud/sessions
   Cross-Service Flags   GET /fraud/cross-service/flags
-  User Profile          GET /fraud/users/{subject_id}/profile
-  Service Activity Log  GET /fraud/services/{service}/activity
+  Action Outcomes       GET /users/{subject_id}/actions
   Transactions          GET /fraud/transactions
   Transaction Detail    GET /fraud/transactions/{event_id}
   Role Analytics        GET /fraud/roles/stats
@@ -31,11 +26,13 @@ Sections:
   GET /fraud/charts/risk-classification
   GET /fraud/charts/source-volume
 """
-
-from fastapi import APIRouter, HTTPException, Query
-from typing import Literal
-
-# from storage.db import get_db_connection
+import re
+from fastapi import APIRouter, Depends, HTTPException, Query
+from typing import Optional
+from core.constants import VALID_SERVICES, RISK_LEVELS_SET
+from core.ids import normalize_event_id
+from datetime import datetime
+from portal_auth_api import require_portal_user
 from storage.db import get_db_connection, release_db_connection
 from storage.dashboard_repo import (
     fetch_event_kpis,
@@ -43,32 +40,31 @@ from storage.dashboard_repo import (
     fetch_score_distribution,
     fetch_risk_band_stats,
     fetch_rules_stats,
-    fetch_ip_device_stats,
+    fetch_ip_threat_stats,
     fetch_sessions,
     fetch_cross_service_flag_stats,
-    fetch_user_profile,
-    fetch_service_activity_log,
+    fetch_user_action_outcomes,
     fetch_transactions,
     fetch_transaction_detail,
+    fetch_role_stats,
     # legacy aliases
     fetch_kpis,
     risk_trend_over_time,
     fraud_type_stats,
     risk_classification_stats,
     source_volume_stats,
-    fetch_role_stats,
 )
 
-router = APIRouter(prefix="/fraud", tags=["Fraud Dashboard"])
-
-_VALID_SERVICES = {"AUTH", "ENROLL", "CONSENT", "WALLET"}
+router = APIRouter(
+    prefix="/fraud",
+    tags=["Fraud Dashboard"],
+    dependencies=[Depends(require_portal_user)],
+)
 
 
 # ---------------------------------------------------------------------------
 # helper — removes boilerplate try/finally on every route
 # ---------------------------------------------------------------------------
-
-
 
 def _with_db(fn):
     """Open a DB connection, call fn(db), close it, return result."""
@@ -107,10 +103,9 @@ def get_event_kpis():
 
 @router.get(
     "/actions/stats",
-    summary="Action counts, breakdown by service, risk trend, source volume",
+    summary="Action counts, risk trend, source volume",
     description=(
-        "Count per action (ALLOW/MONITOR/FLAG/STEP_UP/BLOCK), "
-        "breakdown by service, block & step-up rate %, "
+        "Count per action recieved"
         "risk trend last 24h (hourly), source volume last 24h (hourly)."
     ),
 )
@@ -126,8 +121,8 @@ def get_action_stats():
     "/scores/distribution",
     summary="Score histogram and averages",
     description=(
-        "Histogram in 10-point buckets, overall average score, "
-        "average score per service, average score per action."
+        "overall average score"
+        "average score per service"
     ),
 )
 def get_score_distribution():
@@ -168,20 +163,18 @@ def get_rules_stats():
 
 
 # =============================================================================
-# SECTION 6 — IP & DEVICE THREATS
+# SECTION 6 — IP THREATS
 # =============================================================================
 
 @router.get(
     "/threats/summary",
-    summary="Flagged IPs and flagged/shared devices",
+    summary="Flagged IPs",
     description=(
-        "Total active flagged IPs, events from flagged IPs, full IP list. "
-        "Total flagged devices, events from shared devices (≥5 subjects), "
-        "flagged device list with subject counts."
+        "Total active flagged IPs, events from flagged IPs, full IP list."
     ),
 )
 def get_threat_summary():
-    return _with_db(fetch_ip_device_stats)
+    return _with_db(fetch_ip_threat_stats)
 
 
 # =============================================================================
@@ -223,7 +216,137 @@ def get_cross_service_flags():
 
 
 # =============================================================================
-# SECTION 8B — ROLE ANALYTICS
+# SECTION 9 — PER-USER ACTIONS TAKEN
+# =============================================================================
+@router.get(
+    "/users/{subject_id}/actions",
+    summary="Paginated action-outcome history for a single user",
+    description=(
+        "Every action actually applied by an originating service for this "
+        "subject, newest first: id, event_id, service, action, created_at. "
+        "Queried directly off fraud_action_outcomes by subject_id."
+    ),
+)
+def get_user_actions(
+    subject_id: str,
+    page:  int = Query(default=1,  ge=1),
+    limit: int = Query(default=20, ge=1, le=100),
+):
+    if not subject_id or len(subject_id) > 128 or "\x00" in subject_id:
+        raise HTTPException(status_code=400, detail="Invalid subject_id")
+
+    return _with_db(
+        lambda db: fetch_user_action_outcomes(db, subject_id, page=page, limit=limit)
+    )
+
+# =============================================================================
+# SECTION 10 — TRANSACTION LIST
+# =============================================================================
+
+_TZ_SPACE_RE = re.compile(
+    r"^(.*[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?) (\d{2}:\d{2})$"
+)
+
+def _parse_tz_aware_dt(value: Optional[str], name: str) -> Optional[datetime]:
+    """Parse an ISO-8601 datetime that must carry a UTC offset."""
+    if value is None:
+        return None
+    v = value.strip()
+
+    # An unencoded '+' in a query string arrives as a space: "...00:00:00 05:30"
+    m = _TZ_SPACE_RE.match(v)
+    if m:
+        v = f"{m.group(1)}+{m.group(2)}"
+
+    if v.endswith(("Z", "z")):
+        v = v[:-1] + "+00:00"
+
+    try:
+        dt = datetime.fromisoformat(v)
+    except ValueError:
+        raise HTTPException(
+            status_code=400,
+            detail=f"{name} must be ISO 8601 with a timezone offset, "
+                   "e.g. 2026-09-20T00:00:00+05:30 or 2026-09-20T00:00:00Z",
+        )
+    if dt.tzinfo is None:
+        raise HTTPException(
+            status_code=400,
+            detail=f"{name} must include a timezone offset, "
+                   "e.g. 2026-09-20T00:00:00+05:30 or 2026-09-20T00:00:00Z",
+        )
+    return dt
+
+@router.get(
+    "/transactions",
+    summary="Paginated + filterable list of fraud decisions",
+    description=(
+        "Newest-first list of decisions: event_id, subject_id, service, "
+        "score, risk_level, action, source, created_at. Supports filtering "
+        "by risk_level, service, subject_id (exact match), and date range "
+        "(ISO 8601 with timezone offset). Summary block reflects the same filters."
+    ),
+)
+def get_transactions(
+    page:  int = Query(default=1,  ge=1),
+    limit: int = Query(default=20, ge=1, le=100),
+    risk_level: Optional[str] = Query(default=None, description="NORISK|LOW|MEDIUM|HIGH|CRITICAL"),
+    service:    Optional[str] = Query(default=None, description="AUTH|LOGIN|CONSENT|WALLET"),
+    subject_id: Optional[str] = Query(default=None, description="Exact match, case-sensitive"),
+    date_from:  Optional[str] = Query(default=None, description="ISO 8601 with timezone offset, e.g. 2026-09-20T00:00:00+05:30"),
+    date_to:    Optional[str] = Query(default=None, description="ISO 8601 with timezone offset, e.g. 2026-09-22T23:59:59+05:30"),
+):
+    if risk_level and risk_level.upper() not in RISK_LEVELS_SET:
+        raise HTTPException(status_code=400, detail=f"Invalid risk_level. Must be one of {sorted(RISK_LEVELS_SET)}")
+    if service and service.upper() not in VALID_SERVICES:
+        raise HTTPException(status_code=400, detail=f"Invalid service. Must be one of {sorted(VALID_SERVICES)}")
+    if subject_id and "\x00" in subject_id:
+        raise HTTPException(status_code=400, detail="Invalid subject_id")
+
+    date_from_dt = _parse_tz_aware_dt(date_from, "date_from")
+    date_to_dt   = _parse_tz_aware_dt(date_to, "date_to")
+    if date_from_dt and date_to_dt and date_from_dt > date_to_dt:
+        raise HTTPException(status_code=400, detail="date_from cannot be after date_to")
+
+    return _with_db(lambda db: fetch_transactions(
+        db, page=page, limit=limit,
+        risk_level=risk_level, service=service,
+        subject_id=subject_id, date_from=date_from_dt, date_to=date_to_dt,
+    ))
+
+# =============================================================================
+# SECTION 11 — TRANSACTION DRILL-DOWN
+# =============================================================================
+@router.get(
+    "/transactions/{event_id}",
+    summary="Full scoring journey for a single event",
+    description=(
+        "event_context: identifiers, role, exception code, session_id, "
+        "source, config version, and the raw security / biometric / document / "
+        "consent / wallet payloads. "
+        "features_extracted: every computed feature and a count. "
+        "rules_triggered: per rule, base weight -> chain boost (with reason) "
+        "-> role modifier -> final weight. "
+        "scoring_breakdown: raw score -> exception score -> session amplifier "
+        "-> final score and risk level. "
+        "active_liveness_suggestion: only when applicable. "
+        "action_outcome: the action applied by the originating service, if recorded. "
+        "Returns status DECISION_NOT_YET_AVAILABLE with event_context only if the "
+        "event is stored but not yet scored."
+    ),
+)
+def get_transaction_detail(event_id: str):
+    try:
+        event_id = normalize_event_id(event_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="event_id must be a valid UUID")
+    result = _with_db(lambda db: fetch_transaction_detail(db, event_id))
+    if result.get("status") == "EVENT_NOT_FOUND":
+        raise HTTPException(status_code=404, detail=f"Event not found: {event_id}")
+    return result
+
+# =============================================================================
+# SECTION 12 — ROLE ANALYTICS
 # =============================================================================
 
 @router.get(
@@ -238,107 +361,6 @@ def get_cross_service_flags():
 )
 def get_role_stats():
     return _with_db(fetch_role_stats)
-
-
-# =============================================================================
-# SECTION 9 — PER-USER RISK PROFILE
-# =============================================================================
-
-@router.get(
-    "/users/{subject_id}/profile",
-    summary="Full risk profile for a single user",
-    description=(
-        "Identity profile (composite score, per-service scores, cross-service flag, "
-        "highest risk level, total events). "
-        "Per-service rolling scores (AUTH/ENROLL/CONSENT/WALLET) with last event details. "
-        "Full activity log: every past decision with score, risk, action, triggered rules, "
-        "features, and a human-readable log_line sentence describing what happened. "
-        "Session history for this user."
-    ),
-)
-def get_user_profile(subject_id: str):
-    if not subject_id or len(subject_id) > 128:
-        raise HTTPException(status_code=400, detail="Invalid subject_id")
-
-    result = _with_db(lambda db: fetch_user_profile(db, subject_id))
-
-    if result is None:
-        raise HTTPException(
-            status_code=404,
-            detail=f"No profile found for subject_id={subject_id}",
-        )
-    return result
-
-
-# =============================================================================
-# SECTION 10 — PER-SERVICE ACTIVITY LOG
-# =============================================================================
-
-@router.get(
-    "/services/{service}/activity",
-    summary="Paginated activity log for a service with summary stats",
-    description=(
-        "All decisions for AUTH / ENROLL / CONSENT / WALLET. "
-        "Summary: total events, avg score, top risk level, action breakdown, "
-        "top 10 triggered rules for that service. "
-        "Paginated rows with human-readable log_line per event."
-    ),
-)
-def get_service_activity(
-    service: str,
-    page:    int = Query(default=1,  ge=1),
-    limit:   int = Query(default=50, ge=1, le=200),
-):
-    svc = service.upper()
-    if svc not in _VALID_SERVICES:
-        raise HTTPException(
-            status_code=400,
-            detail=f"service must be one of {sorted(_VALID_SERVICES)}",
-        )
-    return _with_db(
-        lambda db: fetch_service_activity_log(db, service=svc, page=page, limit=limit)
-    )
-
-
-# =============================================================================
-# SECTION 11 — TRANSACTION LIST
-# =============================================================================
-
-@router.get(
-    "/transactions",
-    summary="Paginated list of all fraud decisions",
-    description=(
-        "Newest-first list of decisions: event_id, subject_id, service, "
-        "score, risk_level, action, status (ALLOWED/REVIEWED), source, created_at."
-    ),
-)
-def get_transactions(
-    page:  int = Query(default=1,  ge=1),
-    limit: int = Query(default=20, ge=1, le=100),
-):
-    return _with_db(lambda db: fetch_transactions(db, page=page, limit=limit))
-
-
-# =============================================================================
-# SECTION 12 — TRANSACTION DRILL-DOWN
-# =============================================================================
-
-@router.get(
-    "/transactions/{event_id}",
-    summary="Full journey for a single event",
-    description=(
-        "Decision: score, risk, action, triggered rules, rule weights, "
-        "all features computed, source, config version, human-readable log_line. "
-        "Event: raw security / biometric / document / consent / wallet payloads. "
-        "Session: session state (event count, high count, has_critical, max_score). "
-        "User state: previous decision for this user + current composite profile."
-    ),
-)
-def get_transaction_detail(event_id: str):
-    result = _with_db(lambda db: fetch_transaction_detail(db, event_id))
-    if result.get("status") == "EVENT_NOT_FOUND":
-        raise HTTPException(status_code=404, detail=f"Event not found: {event_id}")
-    return result
 
 
 # =============================================================================

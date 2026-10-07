@@ -24,8 +24,8 @@ SCORED_EVENTS_TOPIC = "fraud.scored.events"
 DEAD_LETTER_TOPIC   = "fraud.events.DLQ"
 
 _DECISION_TOPICS: dict[str, str] = {
-    "login":   "auth.fraud.decisions",
-    "enroll":  "enroll.fraud.decisions",
+    "auth":   "auth.fraud.decisions",
+    "login":   "login.fraud.decisions",
     "consent": "consent.fraud.decisions",
     "wallet":  "wallet.fraud.decisions",
 }
@@ -108,9 +108,11 @@ def produce_decision_event(event_context, fraud_decision: dict) -> None:
         )
 
 
-def produce_dlq_event(kafka_message, error_message: str):
+def produce_dlq_event(kafka_message, error_message: str) -> bool:
     """
     Publish a failed Kafka message to the Dead Letter Queue (DLQ).
+    Returns True if the DLQ write landed (offset is safe to commit),
+   False otherwise (caller must NOT commit — message will be retried).
     """
     try:
         payload = {
@@ -128,6 +130,8 @@ def produce_dlq_event(kafka_message, error_message: str):
         )
         # flush DLQ synchronously — we want to know it landed before discarding
         kafka_producer.flush(timeout=5)
+        return True
 
     except Exception:
         logger.exception(f"{ErrorCode.KAFKA_ERROR}: DLQ publish failure")
+        return False

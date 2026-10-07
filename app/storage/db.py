@@ -1,10 +1,22 @@
 """
-Database connection accessor.
+Database connection accessors.
 
-Re-exports get_db_connection from db_pool so all callers import from
-the same place regardless of whether they use the pool or not.
+This module re-exports the connection-pool helpers so callers have one stable
+import location without depending directly on the pool implementation.
 """
 
-from storage.db_pool import get_db_connection, release_db_connection, pooled_connection
+from storage.db_pool import (
+    close_pool,
+    get_db_connection,
+    pooled_connection,
+    release_db_connection,
+    savepoint
+)
 
-__all__ = ["get_db_connection", "release_db_connection", "pooled_connection"]
+__all__ = [
+    "get_db_connection",
+    "release_db_connection",
+    "pooled_connection",
+    "close_pool",
+    "savepoint",
+]

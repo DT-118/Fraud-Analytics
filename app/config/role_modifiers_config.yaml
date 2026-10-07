@@ -1,0 +1,102 @@
+# Role-based fraud-rule weight modifiers.
+#
+# `value` is a multiplicative dampening factor applied to a triggered rule:
+#
+#   0.0 = suppress the rule completely
+#   0.5 = apply 50% of the rule weight
+#   1.0 = apply the full rule weight
+#
+# Values must remain within [0.0, 1.0]. Values above 1.0 are not supported
+# because role modifiers are intentionally a dampening mechanism, not an
+# amplifier.
+#
+# A missing rule entry means the default modifier is 1.0.
+#
+# `__all__` suppresses every rule for the role and takes precedence over
+# role-specific entries in the YAML. Runtime Redis overrides take precedence
+# over this file and apply immediately.
+
+
+VISITOR:
+
+  # Visitors may use multiple devices while traveling; suppress the new-device signal.
+  DEVICE_NEW_DEVICE_ALLOWANCE:
+    value: 0.0
+    description: "Visitors have no prior device history to compare against, so new-device activity is not treated as a fraud signal."
+
+  # Visitors may legitimately authenticate from different locations while traveling.
+  GEO_VELOCITY:
+    value: 0.0
+    description: "Visitors may authenticate from varying locations while traveling, so geographic mismatch is not treated as a fraud signal."
+
+  # Language changes are less suspicious for visitors who may change locale or device.
+  AUTH_LANGUAGE_FLIP:
+    value: 0.2
+    description: "Language changes are less suspicious for visitors who may switch devices or locales while traveling."
+
+  # Visitor activity can legitimately occur outside normal local hours.
+  ODD_HOUR_ACTIVITY:
+    value: 0.0
+    description: "Visitors may log in at any hour depending on their origin timezone."
+
+RESIDENT:
+
+  # Residents have an established device history, so new-device activity is moderately dampened.
+  DEVICE_NEW_DEVICE_ALLOWANCE:
+    value: 0.7
+    description: "Residents have a stable device history, so some device changes are expected but remain a meaningful signal."
+
+  # Residents may travel, reducing the strength of geographic mismatch.
+  GEO_VELOCITY:
+    value: 0.5
+    description: "Residents travel occasionally, so geographic mismatch is a weaker signal."
+
+  # Residents may legitimately change language or locale.
+  AUTH_LANGUAGE_FLIP:
+    value: 0.6
+    description: "Residents may travel and change devices or locales, so language flips are moderately dampened."
+
+  # Residents can have less predictable schedules than citizens.
+  ODD_HOUR_ACTIVITY:
+    value: 0.7
+    description: "Residents may have less predictable schedules, so off-hours authentication is moderately dampened."
+
+AGENT:
+
+  # Agents may perform legitimate operational work outside normal hours.
+  ODD_HOUR_ACTIVITY:
+    value: 0.0
+    description: "Agents may operate on behalf of the service at any hour for support or back-office work."
+
+  # Agents may use shared or rotating operational devices.
+  DEVICE_NEW_DEVICE_ALLOWANCE:
+    value: 0.5
+    description: "Agents may use shared or rotating operational devices, so new-device activity is moderately dampened."
+
+  # Agents may switch locale while assisting users from different regions.
+  AUTH_LANGUAGE_FLIP:
+    value: 0.5
+    description: "Agents may switch locale while assisting users from different regions, so language flips are moderately dampened."
+
+ADMIN:
+
+  # Administrators may need to act at any hour during operations or incidents.
+  ODD_HOUR_ACTIVITY:
+    value: 0.0
+    description: "Administrators may need to perform operational or incident-response work at any hour."
+
+  # Administrators may use multiple trusted operational devices.
+  DEVICE_NEW_DEVICE_ALLOWANCE:
+    value: 0.5
+    description: "Administrators may use multiple trusted operational devices, so new-device activity is moderately dampened."
+
+SYSTEM:
+
+  # Machine-to-machine events do not represent human fraud behavior.
+  __all__:
+    value: 0.0
+    description: "SYSTEM events are machine-to-machine activity, so human fraud rules are fully suppressed."
+
+# Citizens use the default modifier of 1.0 for every rule unless an explicit
+# citizen-specific exception is added here or through the admin API.
+CITIZEN: {}

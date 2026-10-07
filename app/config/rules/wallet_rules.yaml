@@ -1,0 +1,273 @@
+# WALLET fraud rules.
+#
+# Rule IDs are meaningful, stable identifiers and must never be reused for a
+# different rule. A retired rule may be removed from active configuration or disable by the admin,
+# but its identifier remains reserved historically.
+#
+# Thresholds are evaluated against the configured feature value. An omitted
+# `max` makes the threshold open-ended (feature >= min).
+#
+# Chains only boost a target rule that has already triggered independently.
+# A chain never creates a new rule trigger by itself.
+
+fraud_type: WALLET
+
+rules:
+
+  # Detects an unusually high number of wallet provisions in a short window.
+  WALLET_PROVISION_VELOCITY:
+    enabled: true
+    description: "Flags unusually frequent wallet provisioning within the configured window."
+    feature: provision_count
+    thresholds:
+      - min: 3
+        max: 3
+        weight: 25
+      - min: 4
+        max: 4
+        weight: 40
+      - min: 5
+        max: 5
+        weight: 60
+      - min: 6
+        max: 7
+        weight: 70
+      - min: 8
+        weight: 80
+
+  # Detects an unusually high number of wallet shares in a short window.
+  WALLET_SHARE_VELOCITY:
+    enabled: true
+    description: "Flags unusually frequent wallet sharing within the configured window."
+    feature: share_count
+    thresholds:
+      - min: 3
+        max: 3
+        weight: 25
+      - min: 4
+        max: 4
+        weight: 40
+      - min: 5
+        max: 5
+        weight: 60
+      - min: 6
+        max: 7
+        weight: 70
+      - min: 8
+        weight: 80
+
+  # Detects coordinated rapid wallet provisioning and sharing activity.
+  WALLET_PROVISION_SHARE_BURST:
+    enabled: true
+    description: "Flags coordinated rapid provisioning and sharing activity on the same device."
+    feature: combined_burst
+    thresholds:
+      - min: 2
+        max: 2
+        weight: 30
+      - min: 3
+        max: 3
+        weight: 45
+      - min: 4
+        max: 4
+        weight: 65
+      - min: 5
+        weight: 80
+
+  # Detects an explicit biometric liveness spoof result. Generic — AUTH/WALLET/CONSENT/LOGIN.
+  BIOMETRIC_SPOOF_DETECTED:
+    enabled: true
+    description: "Flags a biometric attempt with a detected liveness spoof."
+    feature: spoof_detected
+    thresholds:
+      - min: 1
+        max: 1
+        weight: 60
+      - min: 2
+        weight: 100
+
+  # Detects biometric attempts where required liveness verification is missing. Generic — AUTH/WALLET/CONSENT/LOGIN.
+  LIVENESS_RESULT_MISSING:
+    enabled: true
+    description: "Flags biometric attempts where required liveness verification is missing."
+    feature: missing_liveness
+    thresholds:
+      - min: 1
+        weight: 60
+
+  # Detects repeated live-face-to-UDB identity mismatches.Generic — AUTH/WALLET/CONSENT/LOGIN.
+  UDB_FACE_MISMATCH:
+    enabled: true
+    description: "Flags repeated live-face-to-UDB identity mismatches."
+    feature: face_udb_mismatch_count
+    thresholds:
+      - min: 1
+        max: 1
+        weight: 15
+      - min: 2
+        max: 2
+        weight: 40
+      - min: 3
+        weight: 60
+
+  # Detects a device shared by an unusually high number of distinct subjects.Generic — AUTH/WALLET/CONSENT/LOGIN.
+  DEVICE_SHARED_ACCOUNTS:
+    enabled: true
+    description: "Flags a device used by an unusually high number of distinct subjects over a long window."
+    feature: device_subject_count
+    thresholds:
+      - min: 8
+        max: 14
+        weight: 40
+      - min: 15
+        weight: 70
+
+  # Detects a device shared by an unusually high number of distinct subjects in short time window.Generic — AUTH/WALLET/CONSENT/LOGIN.
+  DEVICE_SHARED_ACCOUNTS_BURST:
+    enabled: true
+    description: "Flags several distinct subjects using the same device within a short window."
+    feature: device_subject_burst
+    thresholds:
+      - min: 3
+        max: 3
+        weight: 35
+      - min: 4
+        max: 4
+        weight: 50
+      - min: 5
+        weight: 70
+
+  # Detects the first event from a new device after the subject exceeds the device allowance.Generic — AUTH/WALLET/CONSENT/LOGIN.
+  DEVICE_NEW_DEVICE_ALLOWANCE:
+    enabled: true
+    description: "Flags activity from a new device after the configured free-device allowance is exceeded."
+    feature: is_new_device
+    thresholds:
+      - min: 1
+        weight: 45
+
+  # Detects rapid switching between newly observed devices.Generic — AUTH/WALLET/CONSENT/LOGIN.
+  DEVICE_SWITCH_VELOCITY:
+    enabled: true
+    description: "Flags multiple new devices being added by the same subject in a short window."
+    feature: device_switch_velocity
+    thresholds:
+      - min: 2
+        weight: 45
+
+  # Detects events originating from an IP address on the active blocklist.Generic — AUTH/WALLET/CONSENT/LOGIN.
+  IP_BLOCKLIST_MATCH:
+    enabled: true
+    description: "Flags an event originating from an IP address on the active fraud blocklist."
+    feature: ip_is_flagged
+    thresholds:
+      - min: 1
+        weight: 50
+  
+  # Detects repeated geographic-location changes for the subject within the
+  # configured window. Generic — AUTH/LOGIN/CONSENT/WALLET.
+  GEO_VELOCITY:
+    enabled: true
+    description: "Flags repeated geographic-location changes within the configured window."
+    feature: geo_change_velocity
+    thresholds:
+      - min: 1
+        max: 1
+        weight: 30
+      - min: 2
+        max: 2
+        weight: 50
+      - min: 3
+        weight: 70
+  
+  # Detects activity outside the geographic policy allowed for the service.Generic — AUTH/WALLET/CONSENT/LOGIN.
+  GEO_POLICY_VIOLATION:
+    enabled: true
+    description: "Flags activity originating outside the configured geographic policy."
+    feature: is_outside_uae
+    thresholds:
+      - min: 1
+        weight: 80
+
+  # Detects activity occuring during configured off-hours.Generic — AUTH/WALLET/CONSENT/LOGIN.
+  ODD_HOUR_ACTIVITY:
+    enabled: true
+    description: "Flags an activity occurring during configured off-hours."
+    feature: odd_hour_activity
+    thresholds:
+      - min: 1
+        weight: 15
+
+  # Detects behavior that significantly deviates from the subject's historical baseline. Generic — AUTH/WALLET/CONSENT/LOGIN.
+  BASELINE_BEHAVIOR_ANOMALY:
+    enabled: true
+    description: "Flags behavior that significantly deviates from the subject's historical baseline."
+    feature: deviation_score
+    thresholds:
+      - min: 50
+        max: 74
+        weight: 20
+      - min: 75
+        max: 89
+        weight: 40
+      - min: 90
+        weight: 60
+
+chains:
+
+  # Boosts wallet provisioning risk when a shared device has already triggered.
+  - trigger_rules:
+      - DEVICE_SHARED_ACCOUNTS
+    target_rule: WALLET_PROVISION_VELOCITY
+    weight_multiplier: 1.5
+    reason: SHARED_DEVICE_PROVISION_BURST
+
+  # Boosts wallet sharing risk when the source IP is blocklisted.
+  - trigger_rules:
+      - IP_BLOCKLIST_MATCH
+    target_rule: WALLET_SHARE_VELOCITY
+    weight_multiplier: 1.6
+    reason: FLAGGED_IP_SHARE_BURST
+
+  # Boosts combined wallet burst risk when both IP and device sharing are present.
+  - trigger_rules:
+      - IP_BLOCKLIST_MATCH
+      - DEVICE_SHARED_ACCOUNTS
+    target_rule: WALLET_PROVISION_SHARE_BURST
+    weight_multiplier: 1.5
+    reason: FLAGGED_IP_SHARED_DEVICE_COMBINED_BURST
+
+  # Boosts wallet provisioning risk when behavior deviates from the baseline.
+  - trigger_rules:
+      - BASELINE_BEHAVIOR_ANOMALY
+    target_rule: WALLET_PROVISION_VELOCITY
+    weight_multiplier: 1.3
+    reason: BASELINE_DEVIATION_PROVISION_BURST
+
+  # Boosts geo-velocity risk for a blocklisted IP on a new device.
+  - trigger_rules:
+      - IP_BLOCKLIST_MATCH
+      - DEVICE_NEW_DEVICE_ALLOWANCE
+    target_rule: GEO_VELOCITY
+    weight_multiplier: 1.5
+    reason: FLAGGED_IP_NEW_DEVICE_GEO_JUMP
+  
+  # Boosts new-device risk when behavior is anomalous against the baseline.
+  - trigger_rules:
+      - BASELINE_BEHAVIOR_ANOMALY
+    target_rule: DEVICE_NEW_DEVICE_ALLOWANCE
+    weight_multiplier: 1.3
+    reason: BASELINE_DEVIATION_NEW_DEVICE
+
+  - trigger_rules:
+      - DEVICE_SHARED_ACCOUNTS_BURST
+    target_rule: WALLET_PROVISION_VELOCITY
+    weight_multiplier: 1.5
+    reason: SHARED_DEVICE_BURST_PROVISION_BURST
+
+  - trigger_rules:
+      - IP_BLOCKLIST_MATCH
+      - DEVICE_SHARED_ACCOUNTS_BURST
+    target_rule: WALLET_PROVISION_SHARE_BURST
+    weight_multiplier: 1.5
+    reason: FLAGGED_IP_SHARED_DEVICE_BURST_COMBINED_BURST

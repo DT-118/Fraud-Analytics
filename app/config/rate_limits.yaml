@@ -1,24 +1,34 @@
-# =============================================================================
-# Per-Service Rate Limits
-# =============================================================================
-# rpm (requests per minute) per API key per service.
+# API rate limits.
 #
-# AUTH receives the highest volume — every citizen login passes through it.
-# WALLET and ENROLL are financial/identity-critical — lower limits prevent
-# automated stuffing even if an API key is compromised.
+# Limits are requests per minute (RPM) per API key.
 #
-# default: applied when a request cannot be mapped to a known service
-#   (e.g., malformed payloads, unknown action_taxonomy).
+# `global` is the hard ceiling across all services for one API key.
+# `per_service` limits traffic for each individual service.
+# `default` applies when the request cannot be mapped to a known service.
 #
-# global: applied regardless of service — hard ceiling across all requests
-#   from a single API key, preventing one key from monopolizing capacity.
-# =============================================================================
+# Runtime overrides may be applied through the admin API. Those Redis
+# overrides take precedence over these YAML defaults until cleared.
+#
+# The sliding-window implementation uses `window_seconds` as the enforcement
+# window. Keep the value aligned with the unit used by rate_limiter.py.
 
 global: 2000
 
+window_seconds: 60
+
 per_service:
-  AUTH:    1200
-  ENROLL:  300
-  WALLET:  600
+
+  # Authentication carries the highest expected request volume.
+  AUTH: 1200
+
+  # Login is identity-critical and receives a lower ceiling.
+  LOGIN: 300
+
+  # Wallet operations receive a controlled service-specific ceiling.
+  WALLET: 600
+
+  # Consent operations receive a controlled service-specific ceiling.
   CONSENT: 600
+
+  # Fallback for requests without a recognized service.
   default: 600

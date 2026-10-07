@@ -1,7 +1,7 @@
 """
 baseline_repo.py
 
-Persistence layer for per-user per-feature behavioral baselines (Phase 5).
+Persistence layer for per-user per-feature behavioral baselines.
 
 Each (subject_id, service, feature_name) triple accumulates a rolling mean
 and variance using Welford's online algorithm, which allows incremental updates
@@ -20,21 +20,19 @@ the SELECT → compute → INSERT race condition under concurrent updates.
 """
 
 import math
-from typing import Optional
-
-from core.errors import ErrorCode
 from core.logger import logger
-
-# Features that are DERIVED from baselines — never feed them back into baselines
-# to avoid circular z-score amplification.
+from storage.db_pool import savepoint
+# Derived features must never be fed back into their own baselines.
+# Otherwise the baseline can amplify its own z-score/deviation output.
 _DERIVED_FEATURE_SUFFIXES = ("_zscore",)
-_DERIVED_FEATURE_NAMES    = {"max_zscore", "deviation_score"}
+_DERIVED_FEATURE_NAMES = {"max_zscore", "deviation_score"}
 
 
 def _is_derived_feature(name: str) -> bool:
+    """Return True when a feature is derived from an existing baseline."""
     if name in _DERIVED_FEATURE_NAMES:
         return True
-    return any(name.endswith(s) for s in _DERIVED_FEATURE_SUFFIXES)
+    return any(name.endswith(suffix) for suffix in _DERIVED_FEATURE_SUFFIXES)
 
 
 def fetch_baselines(
@@ -55,16 +53,17 @@ def fetch_baselines(
         WHERE  subject_id = %s AND service = %s
     """
     try:
-        with db_connection.cursor() as cur:
-            cur.execute(sql, (subject_id, service))
-            rows = cur.fetchall()
+        with savepoint(db_connection, "sp_baselines"):
+            with db_connection.cursor() as cur:
+                cur.execute(sql, (subject_id, service))
+                rows = cur.fetchall()
 
         result: dict[str, dict] = {}
         for feature_name, mean, m2, sample_count in rows:
             std_dev = math.sqrt(float(m2) / (sample_count - 1)) if sample_count >= 2 else 0.0
             result[feature_name] = {
-                "mean":         float(mean),
-                "std_dev":      std_dev,
+                "mean": float(mean),
+                "std_dev": std_dev,
                 "sample_count": sample_count,
             }
         return result
@@ -72,7 +71,9 @@ def fetch_baselines(
     except Exception as exc:
         logger.warning(
             "[BASELINE] fetch_baselines failed subject_id=%s service=%s: %s",
-            subject_id, service, exc,
+            subject_id,
+            service,
+            exc,
         )
         return {}
 
@@ -93,13 +94,18 @@ def fetch_service_tolerance(
         WHERE  service = %s AND enabled = TRUE
     """
     try:
-        with db_connection.cursor() as cur:
-            cur.execute(sql, (service,))
-            rows = cur.fetchall()
+        with savepoint(db_connection, "sp_tolerance"):
+            with db_connection.cursor() as cur:
+                cur.execute(sql, (service,))
+                rows = cur.fetchall()
         return {row[0]: float(row[1]) for row in rows} if rows else {"*": 2.5}
 
     except Exception as exc:
-        logger.warning("[BASELINE] fetch_service_tolerance failed service=%s: %s", service, exc)
+        logger.warning(
+            "[BASELINE] fetch_service_tolerance failed service=%s: %s",
+            service,
+            exc,
+        )
         return {"*": 2.5}
 
 
@@ -113,9 +119,8 @@ def upsert_baseline(
     """
     Apply one atomic Welford update to a single feature baseline.
 
-    The entire SELECT + compute + INSERT is expressed as a single SQL
-    statement so there is no race between reading old values and writing
-    new ones.  Safe to call from a background thread.
+    The update is expressed as a single SQL statement so concurrent workers
+    do not have a SELECT-then-write race.
     """
     sql = """
         INSERT INTO user_feature_baseline
@@ -136,7 +141,7 @@ def upsert_baseline(
             updated_at = NOW()
     """
     try:
-        with db_connection.cursor() as cur:
+        with savepoint(db_connection, "sp_baseline_upsert"), db_connection.cursor() as cur:
             cur.execute(sql, (
                 subject_id, service, feature_name, new_value,  # INSERT values
                 new_value,   # delta = x - old_mean   (first %s in mean expr)
@@ -161,8 +166,8 @@ def upsert_baselines_for_event(
     """
     Update baselines for all raw numeric features in a scored event.
 
-    Derived features (z-scores, deviation_score, max_zscore) are explicitly
-    excluded to prevent circular amplification.  Called from a background thread.
+    Derived features are excluded to prevent circular amplification.
+    This function is safe to call from the background baseline-update path.
     """
     for feature_name, value in feature_values.items():
         if _is_derived_feature(feature_name):
@@ -170,6 +175,12 @@ def upsert_baselines_for_event(
         if not isinstance(value, (int, float)):
             continue
         try:
-            upsert_baseline(db_connection, subject_id, service, feature_name, float(value))
+            upsert_baseline(
+                db_connection,
+                subject_id,
+                service,
+                feature_name,
+                float(value),
+            )
         except Exception:
             pass

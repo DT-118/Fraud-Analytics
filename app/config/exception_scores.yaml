@@ -1,0 +1,51 @@
+# Exception-code score adjustments.
+#
+# These values are additive score adjustments applied after rule scoring:
+#
+#     final_score = min(100, raw_score + exception_score)
+#
+# Exception codes are meaningful, stable identifiers. They are not sequence
+# numbers and must never be reused for a different exception.
+#
+# If an exception is retired, remove it from active configuration but reserve
+# its identifier permanently so historical decisions remain interpretable.
+#
+# IMPORTANT:
+# Exception codes can originate from upstream services. Any rename therefore
+# requires updating every producer, consumer, test, API contract, and stored
+# reference that uses the old code.
+
+# Detects a failed biometric verification during authentication.
+AUTH_BIOMETRIC_VERIFICATION_FAILED:
+  value: 25
+  description: "Biometric verification failed."
+
+# Detects a device that is not recognized by the calling service.
+AUTH_UNRECOGNIZED_DEVICE:
+  value: 15
+  description: "Device was not recognized by the calling service."
+
+# Detects a failed passport scan during visitor authentication.
+AUTH_PASSPORT_SCAN_FAILED:
+  value: 20
+  description: "Passport scan failed during visitor document authentication."
+
+# Detects an invalid visitor visa or failed entitlement verification.
+AUTH_VISA_ENTITLEMENT_FAILED:
+  value: 25
+  description: "Visa status is invalid or visitor entitlement verification failed."
+
+# Detects a failed face-to-document comparison.
+FACE_DOCUMENT_MISMATCH:
+  value: 20
+  description: "Face-to-document match failed."
+
+# Detects a failed liveness verification.
+LIVENESS_FAILED:
+  value: 15
+  description: "Liveness verification failed."
+
+# Detects unauthorized wallet sharing reported by the calling service.
+WALLET_UNAUTHORIZED_SHARING:
+  value: 15
+  description: "Unauthorized wallet sharing was detected by the calling service."

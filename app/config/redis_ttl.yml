@@ -1,91 +1,79 @@
-# =============================================================================
-# Redis TTL Configuration
-# -----------------------------------------------------------------------------
-# Purpose:
-#   Defines time-to-live (TTL) values for Redis keys used by the fraud engine.
-#   These TTLs control how long behavioral memory is retained for feature
-#   computation. TTLs are FEATURE-driven, not cleanup-driven.
+# Redis behavioral-state retention.
 #
-# Design Principles:
-#   - Short TTLs → burst / velocity detection
-#   - Long TTLs  → behavioral memory & baselines
-#   - No scoring logic here (only state retention)
-# =============================================================================
+# These values define how long the fraud engine keeps short-term behavioral
+# state used by feature calculations. They are feature-retention settings,
+# not general Redis cleanup settings.
+#
+# Values are stored in seconds. The equivalent duration is shown beside every
+# value for quick operational understanding.
+#
+# Keep each TTL at least as long as the detection window that the feature
+# needs to observe. Changing a TTL can change fraud-detection behavior and
+# therefore requires regression testing.
+#
 
-# ---------------------------------------------------------------------------
-# Authentication-related Redis memory
-# ---------------------------------------------------------------------------
 auth:
-  fail_window: 600          # AUTH-01, AUTH-03
-                            # Failed login attempts window (10 minutes)
 
-  ip_fail_window: 900       # AUTH-02
-                            # IP-based brute force detection window (15 minutes)
+  # Failed-authentication history used by AUTH_CONSECUTIVE_FAILURES.
+  fail_window: 600  # 600 seconds = 10 minutes
 
-  success_window: 300       # AUTH-10 — rapid success velocity (5 minutes)
+  # Failed-authentication history grouped by source IP for AUTH_IP_BRUTE_FORCE.
+  ip_fail_window: 900  # 900 seconds = 15 minutes
+
+  # Recent successful-authentication history used by AUTH_SUCCESS_VELOCITY.
+  success_window: 300  # 300 seconds = 5 minutes
 
 
-# ---------------------------------------------------------------------------
-# Identity & device behavior memory
-# ---------------------------------------------------------------------------
 identity:
-  device_memory: 2592000    # AUTH-04
-                            # Device history retention per user (30 days)
 
-  geo_memory: 2592000       # AUTH-05
-                            # Geo-location history retention (30 days)
-                            
-  browser_memory: 86400         # 1 day
-                                 # Browser baseline memory
+  # How long we remember a subject's last location (detects IF it changed) — the window counting HOW MANY changes is in thresholds.yml GEO_VELOCITY.velocity_window_seconds.
+  geo_memory: 86400  # 86400 seconds = 24 hours 
 
-  screen_resolution_memory: 86400  # 1 day
-                                   # Environment consistency check
+  # Browser history used to detect AUTH_BROWSER_DOWNGRADE.
+  browser_memory: 86400  # 86400 seconds = 24 hours
 
-  language_memory: 2592000      # 30 days
-                                 # Long-term behavior drift
+  # Screen-resolution history used by AUTH_SUSPICIOUS_SCREEN_RESOLUTION.
+  screen_resolution_memory: 86400  # 86400 seconds = 24 hours
 
-
-# ---------------------------------------------------------------------------
-# Behavioral baselines (future expansion)
-# ---------------------------------------------------------------------------
-behavior:
-  time_of_day: 1209600      # AUTH-09 (future / extended)
-                            # Login hour behavior baseline (14 days)
+  # Last-seen language per subject (used to detect a change). This does NOT
+  # control how flips are counted; that window is
+  # thresholds.yml -> AUTH_LANGUAGE_FLIP.flip_window_seconds.
+  language_memory: 2592000  # 2592000 seconds = 30 days
 
 
-# ---------------------------------------------------------------------------
-# Biometric / liveness checks
-# ---------------------------------------------------------------------------
-liveness:
-  attempt_window: 600       # LIVE-01
-                            # Liveness spoof detection window (10 minutes)
+biometric:
+
+  # Recent liveness attempts used by BIOMETRIC_SPOOF_DETECTED (all services).
+  spoof_window: 600  # 600 seconds = 10 minutes
+
+  # Face-to-UDB mismatch history used by UDB_FACE_MISMATCH (all services).
+  face_mismatch_window: 900  # 900 seconds = 15 minutes
 
 
-# ---------------------------------------------------------------------------
-# Enrollment process behavior
-# ---------------------------------------------------------------------------
-enroll:
-  doc_fail_window: 900      # ENR-01
-                            # Document verification failure window (15 minutes)
+login:
 
-  bio_mismatch_window: 900  # ENR-02
-                            # Face vs document mismatch window (15 minutes)
-
-  device_identity_window: 1200  # ENR-03
-                               # Multiple identities from same device window (20 minutes)
+  # Document/UDB mismatch history used by LOGIN_DOCUMENT_UDB_MISMATCH.
+  doc_fail_window: 900  # 900 seconds = 15 minutes
 
 
-# ---------------------------------------------------------------------------
-# Consent activity tracking
-# ---------------------------------------------------------------------------
 consent:
-  grant_window: 300        # CONS-01
-                            # Consent grant spike detection window (5 minutes)
+
+  # Recent consent grants used by CONSENT_GRANT_VELOCITY.
+  grant_window: 300  # 300 seconds = 5 minutes
 
 
-# ---------------------------------------------------------------------------
-# Wallet activity tracking
-# ---------------------------------------------------------------------------
 wallet:
-  provision_window: 300           # WAL-01 (wallet provisioning velocity)(5 minutes)
-  share_window: 300               # WAL-02 (wallet sharing velocity)(5 minutes)
+
+  # Recent wallet provisions used by WALLET_PROVISION_VELOCITY.
+  provision_window: 300  # 300 seconds = 5 minutes
+
+  # Recent wallet shares used by WALLET_SHARE_VELOCITY.
+  share_window: 300  # 300 seconds = 5 minutes
+
+
+device:
+  # Sliding window for DEVICE_SHARED_ACCOUNTS; also the key's overall TTL.
+  device_subject_memory: 2592000  # 30 days
+
+  # Sliding window for DEVICE_SHARED_ACCOUNTS_BURST. Must be <= device_subject_memory.
+  device_subject_burst_window: 3600  # 1 hour

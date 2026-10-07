@@ -1,0 +1,296 @@
+# AUTH fraud rules.
+#
+# Rule IDs are meaningful, stable identifiers and must never be reused for a
+# different rule. A retired rule may be removed from active configuration or disable by the admin,
+# but its identifier remains reserved historically.
+#
+# Thresholds are evaluated against the configured feature value. An omitted
+# `max` makes the threshold open-ended (feature >= min).
+#
+# Chains only boost a target rule that has already triggered independently.
+# A chain never creates a new rule trigger by itself.
+
+fraud_type: AUTH
+
+rules:
+
+  # Detects repeated consecutive authentication failures for the same user.
+  AUTH_CONSECUTIVE_FAILURES:
+    enabled: true
+    description: "Flags repeated consecutive authentication failures for the same user."
+    feature: user_fail_count
+    thresholds:
+      - min: 2
+        max: 2
+        weight: 30
+      - min: 3
+        max: 3
+        weight: 60
+      - min: 4
+        weight: 80
+
+  # Detects brute-force activity from one IP against multiple user accounts.
+  AUTH_IP_BRUTE_FORCE:
+    enabled: true
+    description: "Flags an IP failing authentication against multiple users."
+    feature: ip_failed_subject_count
+    thresholds:
+      - min: 3
+        max: 3
+        weight: 45
+      - min: 4
+        weight: 60
+
+  # Detects a successful authentication after a sustained failure streak.
+  AUTH_SUCCESS_AFTER_FAILURES:
+    enabled: true
+    description: "Flags successful authentication following repeated failures."
+    feature: fail_before_success
+    thresholds:
+      - min: 3
+        weight: 20
+
+  # Detects a significant browser-version downgrade during authentication.
+  AUTH_BROWSER_DOWNGRADE:
+    enabled: true
+    description: "Flags a significant browser-version downgrade during authentication."
+    feature: is_old_browser
+    thresholds:
+      - min: 1
+        weight: 15
+
+  # Detects screen resolutions commonly associated with automation or emulation.
+  AUTH_SUSPICIOUS_SCREEN_RESOLUTION:
+    enabled: true
+    description: "Flags a suspicious screen resolution associated with automation or emulation."
+    feature: suspicious_resolution
+    thresholds:
+      - min: 1
+        weight: 15
+
+  # Detects repeated language changes on successful authentication within the configured flip window.
+  AUTH_LANGUAGE_FLIP:
+    enabled: true
+    description: "Flags repeated language changes across successful authentications within the configured window."
+    feature: language_flip_on_success
+    thresholds:
+      - min: 2
+        max: 2
+        weight: 10
+      - min: 3
+        weight: 20
+
+  # Detects an unusually high number of successful authentications in a short window.
+  AUTH_SUCCESS_VELOCITY:
+    enabled: true
+    description: "Flags unusually frequent successful authentications for the same user."
+    feature: success_velocity
+    thresholds:
+      - min: 3
+        max: 4
+        weight: 20
+      - min: 5
+        max: 7
+        weight: 40
+      - min: 8
+        weight: 60
+
+  # Detects an explicit biometric liveness spoof result. Generic — AUTH/WALLET/CONSENT/LOGIN.
+  BIOMETRIC_SPOOF_DETECTED:
+    enabled: true
+    description: "Flags a biometric attempt with a detected liveness spoof."
+    feature: spoof_detected
+    thresholds:
+      - min: 1
+        max: 1
+        weight: 60
+      - min: 2
+        weight: 100
+
+  # Detects biometric attempts where required liveness verification is missing. Generic — AUTH/WALLET/CONSENT/LOGIN.
+  LIVENESS_RESULT_MISSING:
+    enabled: true
+    description: "Flags biometric attempts where required liveness verification is missing."
+    feature: missing_liveness
+    thresholds:
+      - min: 1
+        weight: 60
+
+  # Detects repeated live-face-to-UDB identity mismatches.Generic — AUTH/WALLET/CONSENT/LOGIN.
+  UDB_FACE_MISMATCH:
+    enabled: true
+    description: "Flags repeated live-face-to-UDB identity mismatches."
+    feature: face_udb_mismatch_count
+    thresholds:
+      - min: 1
+        max: 1
+        weight: 15
+      - min: 2
+        max: 2
+        weight: 40
+      - min: 3
+        weight: 60
+
+  # Detects a device shared by an unusually high number of distinct subjects.Generic — AUTH/WALLET/CONSENT/LOGIN.
+  DEVICE_SHARED_ACCOUNTS:
+    enabled: true
+    description: "Flags a device used by an unusually high number of distinct subjects over a long window."
+    feature: device_subject_count
+    thresholds:
+      - min: 8
+        max: 14
+        weight: 40
+      - min: 15
+        weight: 70
+
+  # Detects a device shared by an unusually high number of distinct subjects in short time window.Generic — AUTH/WALLET/CONSENT/LOGIN.
+  DEVICE_SHARED_ACCOUNTS_BURST:
+    enabled: true
+    description: "Flags several distinct subjects using the same device within a short window."
+    feature: device_subject_burst
+    thresholds:
+      - min: 3
+        max: 3
+        weight: 35
+      - min: 4
+        max: 4
+        weight: 50
+      - min: 5
+        weight: 70
+
+  # Detects the first event from a new device after the subject exceeds the device allowance.Generic — AUTH/WALLET/CONSENT/LOGIN.
+  DEVICE_NEW_DEVICE_ALLOWANCE:
+    enabled: true
+    description: "Flags activity from a new device after the configured free-device allowance is exceeded."
+    feature: is_new_device
+    thresholds:
+      - min: 1
+        weight: 45
+
+  # Detects rapid switching between newly observed devices.Generic — AUTH/WALLET/CONSENT/LOGIN.
+  DEVICE_SWITCH_VELOCITY:
+    enabled: true
+    description: "Flags multiple new devices being added by the same subject in a short window."
+    feature: device_switch_velocity
+    thresholds:
+      - min: 2
+        weight: 45
+
+  # Detects events originating from an IP address on the active blocklist.Generic — AUTH/WALLET/CONSENT/LOGIN.
+  IP_BLOCKLIST_MATCH:
+    enabled: true
+    description: "Flags an event originating from an IP address on the active fraud blocklist."
+    feature: ip_is_flagged
+    thresholds:
+      - min: 1
+        weight: 50
+
+  # Detects repeated geographic-location changes for the subject within the
+  # configured window. Generic — AUTH/LOGIN/CONSENT/WALLET.
+  GEO_VELOCITY:
+    enabled: true
+    description: "Flags repeated geographic-location changes within the configured window."
+    feature: geo_change_velocity
+    thresholds:
+      - min: 1
+        max: 1
+        weight: 30
+      - min: 2
+        max: 2
+        weight: 50
+      - min: 3
+        weight: 70     
+
+  # Detects activity outside the geographic policy allowed for the service.Generic — AUTH/WALLET/CONSENT/LOGIN.
+  GEO_POLICY_VIOLATION:
+    enabled: true
+    description: "Flags activity originating outside the configured geographic policy."
+    feature: is_outside_uae
+    thresholds:
+      - min: 1
+        weight: 80
+
+  # Detects activity occuring during configured off-hours.Generic — AUTH/WALLET/CONSENT/LOGIN.
+  ODD_HOUR_ACTIVITY:
+    enabled: true
+    description: "Flags an activity occurring during configured off-hours."
+    feature: odd_hour_activity
+    thresholds:
+      - min: 1
+        weight: 15
+
+  # Detects behavior that significantly deviates from the subject's historical baseline. Generic — AUTH/WALLET/CONSENT/LOGIN.
+  BASELINE_BEHAVIOR_ANOMALY:
+    enabled: true
+    description: "Flags behavior that significantly deviates from the subject's historical baseline."
+    feature: deviation_score
+    thresholds:
+      - min: 50
+        max: 74
+        weight: 20
+      - min: 75
+        max: 89
+        weight: 40
+      - min: 90
+        weight: 60
+
+chains:
+
+  # Boosts authentication-failure risk when a new-device event has already triggered.
+  - trigger_rules:
+      - DEVICE_NEW_DEVICE_ALLOWANCE
+    target_rule: AUTH_CONSECUTIVE_FAILURES
+    weight_multiplier: 1.5
+    reason: NEW_DEVICE_WITH_FAILURES
+
+  # Boosts authentication-failure risk when several subjects share the device in a short window.
+  - trigger_rules:
+      - DEVICE_SHARED_ACCOUNTS_BURST
+    target_rule: AUTH_CONSECUTIVE_FAILURES
+    weight_multiplier: 1.4
+    reason: SHARED_DEVICE_BURST_WITH_FAILURES
+
+  # Boosts IP brute-force risk when a geographic jump and new device coincide.
+  - trigger_rules:
+      - GEO_VELOCITY
+      - DEVICE_NEW_DEVICE_ALLOWANCE
+    target_rule: AUTH_IP_BRUTE_FORCE
+    weight_multiplier: 1.4
+    reason: GEO_JUMP_NEW_DEVICE_WITH_IP_FAILURES
+
+  # Boosts authentication-failure risk when the source IP is blocklisted.
+  - trigger_rules:
+      - IP_BLOCKLIST_MATCH
+    target_rule: AUTH_CONSECUTIVE_FAILURES
+    weight_multiplier: 1.6
+    reason: FLAGGED_IP_WITH_FAILURES
+
+  # Boosts geo-velocity risk for a blocklisted IP on a new device.
+  - trigger_rules:
+      - IP_BLOCKLIST_MATCH
+      - DEVICE_NEW_DEVICE_ALLOWANCE
+    target_rule: GEO_VELOCITY
+    weight_multiplier: 1.5
+    reason: FLAGGED_IP_NEW_DEVICE_GEO_JUMP
+
+  # Boosts authentication-failure risk when liveness spoofing and a new device coincide.
+  - trigger_rules:
+      - BIOMETRIC_SPOOF_DETECTED   
+      - DEVICE_NEW_DEVICE_ALLOWANCE
+    target_rule: AUTH_CONSECUTIVE_FAILURES
+    weight_multiplier: 1.4
+    reason: LIVENESS_SPOOF_NEW_DEVICE
+
+  # Boosts authentication-failure risk when behavior is anomalous against the baseline.
+  - trigger_rules:
+      - BASELINE_BEHAVIOR_ANOMALY
+    target_rule: AUTH_CONSECUTIVE_FAILURES
+    weight_multiplier: 1.3
+    reason: BASELINE_DEVIATION_WITH_FAILURES
+
+  # Boosts new-device risk when behavior is anomalous against the baseline.
+  - trigger_rules:
+      - BASELINE_BEHAVIOR_ANOMALY
+    target_rule: DEVICE_NEW_DEVICE_ALLOWANCE
+    weight_multiplier: 1.3
+    reason: BASELINE_DEVIATION_NEW_DEVICE

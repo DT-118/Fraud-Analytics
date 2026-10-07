@@ -16,3 +16,4 @@ uvicorn
 bcrypt
 PyJWT
 python-dotenv
+tzdata

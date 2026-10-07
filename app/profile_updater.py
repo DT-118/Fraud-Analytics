@@ -53,6 +53,21 @@ _KAFKA_CONFIG = {
 }
 
 
+_BACKFILL_MODE_ENV_VAR = "PROFILE_UPDATER_MODE"
+
+def _assert_backfill_mode_confirmed() -> None:
+     """Require PROFILE_UPDATER_MODE=backfill to start — turns 'accidentally
+     deployed as a standing service' into a conscious operator decision."""
+     mode = os.environ.get(_BACKFILL_MODE_ENV_VAR, "").strip().lower()
+     if mode != "backfill":
+         raise RuntimeError(
+             f"{_BACKFILL_MODE_ENV_VAR}=backfill must be explicitly set to run "
+             "profile_updater.py. Leaving this running alongside the live "
+             "scoring engine DOUBLE-APPLIES every profile update."
+         )
+
+
+
 def _parse_event_time(raw: str) -> datetime:
     """Parse ISO-8601 timestamp from the scored event payload."""
     try:
@@ -87,6 +102,7 @@ def start_profile_updater() -> None:
     """
     Subscribe to fraud.scored.events and keep all risk profiles up to date.
     """
+    _assert_backfill_mode_confirmed()
     consumer = Consumer(_KAFKA_CONFIG)
     consumer.subscribe([_SCORED_EVENTS_TOPIC])
 
@@ -114,7 +130,6 @@ def start_profile_updater() -> None:
                 final_score     = int(payload["score"])
                 event_id        = payload["event_id"]
                 risk_level      = payload["risk_level"]
-                action_taken    = payload.get("action_taken", "UNKNOWN")
                 event_time      = _parse_event_time(payload.get("timestamp", ""))
 
                 update_risk_profile(
@@ -125,7 +140,6 @@ def start_profile_updater() -> None:
                     event_id=event_id,
                     event_time=event_time,
                     risk_level=risk_level,
-                    action_taken=action_taken,
                 )
 
                 db_connection.commit()
@@ -139,12 +153,18 @@ def start_profile_updater() -> None:
             except (KeyError, ValueError, json.JSONDecodeError) as exc:
                 db_connection.rollback()
                 logger.error("[PROFILE_UPDATER] Malformed message: %s", exc)
-                _produce_dlq(raw_bytes, str(exc))
+                if _produce_dlq(raw_bytes, str(exc)):
+                    consumer.commit(message)
+                else:
+                    logger.error("[PROFILE_UPDATER] DLQ write failed — offset NOT committed")
 
             except Exception as exc:
                 db_connection.rollback()
                 logger.exception("%s: Profile update failure", ErrorCode.KAFKA_ERROR)
-                _produce_dlq(raw_bytes, str(exc))
+                if _produce_dlq(raw_bytes, str(exc)):
+                    consumer.commit(message)
+                else:
+                    logger.error("[PROFILE_UPDATER] DLQ write failed — offset NOT committed")
 
             finally:
                 release_db_connection(db_connection)

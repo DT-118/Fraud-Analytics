@@ -1,22 +1,23 @@
 """
 profile_service.py
 
-Service layer for dynamic risk profile management (Phase 3).
+Service layer for dynamic risk profile management.
 
 Responsibilities:
   1. Map action_taxonomy → canonical service key
-  2. Upsert the per-service rolling risk score (time-decayed EWMA)
+  2. Upsert the per-service rolling risk score (time-decayed EWMA) AND its
+     independent escalation penalty for severe individual events
   3. Detect cross-service fraud patterns and set flag + reason
   4. Recompute and persist the composite identity risk profile
   5. Serve the profile GET endpoint by assembling the full response
+
 """
 
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Optional
-
 from core.config_loader import HotConfig
-from core.constants import TAXONOMY_TO_SERVICE
+from core.constants import TAXONOMY_TO_SERVICE,VALID_SERVICES
 from core.errors import ErrorCode
 from core.logger import logger
 from storage.profile_repo import (
@@ -26,8 +27,6 @@ from storage.profile_repo import (
     fetch_service_subject_profiles,
     upsert_service_profile,
 )
-
-_VALID_SERVICES = {"AUTH", "ENROLL", "CONSENT", "WALLET"}
 
 _patterns_config = HotConfig(Path(__file__).parent.parent / "config/cross_service_patterns.yaml")
 
@@ -51,6 +50,7 @@ def _detect_cross_service_flag(
     service_profiles: list[dict],
     current_service: str,
     current_risk_level: str,
+    reference_time : datetime,
 ) -> tuple[bool, Optional[str]]:
     """
     Scan the service profiles for cross-service fraud patterns.
@@ -59,9 +59,14 @@ def _detect_cross_service_flag(
     Checks both directions:
       - Is the current event the *target* (i.e., the trigger service fired earlier)?
       - Is the current event the *trigger* (i.e., has the target service fired recently)?
+
+    Uses last_risk_level (the per-EVENT band, unaffected by EWMA dilution)
+    for the trigger check — not rolling/effective score — so this detector
+    was never actually subject to the "diluted by fast bursts" problem that
+    motivated escalation policy
     """
     profile_map: dict[str, dict] = {p["service"]: p for p in service_profiles}
-    now = datetime.now(timezone.utc)
+    now = reference_time
     patterns = _load_patterns()
 
     for trigger_svc, trigger_levels, target_svc, window_min, reason in patterns:
@@ -78,7 +83,7 @@ def _detect_cross_service_flag(
                     )
                     if last_time.tzinfo is None:
                         last_time = last_time.replace(tzinfo=timezone.utc)
-                    if (now - last_time) <= timedelta(minutes=window_min):
+                    if timedelta(0) <= (now - last_time) <= timedelta(minutes=window_min):
                         return True, reason
 
         # Pattern also fires when current event is the TRIGGER and target fired recently
@@ -93,7 +98,7 @@ def _detect_cross_service_flag(
                 )
                 if last_time.tzinfo is None:
                     last_time = last_time.replace(tzinfo=timezone.utc)
-                if (now - last_time) <= timedelta(minutes=window_min):
+                if timedelta(0) <= (last_time - now) <= timedelta(minutes=window_min):
                     return True, reason
 
     return False, None
@@ -107,7 +112,6 @@ def update_risk_profile(
     event_id: str,
     event_time: datetime,
     risk_level: str,
-    #action_taken: str,
 ) -> None:
     """
     Update both the per-service and composite identity risk profiles.
@@ -122,8 +126,9 @@ def update_risk_profile(
                            action_taxonomy)
             return
 
-        # Step 1: Update per-service profile and get the new rolling score
-        new_service_rolling = upsert_service_profile(
+        # Step 1: Update per-service profile (rolling + escalation) and get
+        # the new EFFECTIVE score (rolling + escalation, capped at 100).
+        service_update = upsert_service_profile(
             db_connection,
             subject_id=subject_id,
             service=service,
@@ -131,15 +136,25 @@ def update_risk_profile(
             event_id=event_id,
             event_time=event_time,
             risk_level=risk_level,
-            #action_taken=action_taken,
         )
+        new_service_effective = service_update["effective_score"]
+
+        if service_update["escalation_score"] > 0:
+            logger.info(
+                "[PROFILE] Escalation active subject_id=%s service=%s "
+                "rolling=%.2f escalation=%.2f effective=%.2f",
+                subject_id, service,
+                service_update["rolling_score"],
+                service_update["escalation_score"],
+                new_service_effective,
+            )
 
         # Step 2: Fetch current state of all service profiles for cross-service check
         service_profiles = fetch_service_profiles(db_connection, subject_id)
 
         # Step 3: Detect cross-service fraud pattern
         cross_flag, cross_reason = _detect_cross_service_flag(
-            service_profiles, service, risk_level
+            service_profiles, service, risk_level, reference_time=event_time
         )
 
         if cross_flag:
@@ -148,25 +163,28 @@ def update_risk_profile(
                 subject_id, cross_reason,
             )
 
-        # Step 4: Build the latest service score map for composite calculation
-        # Merge the just-updated service score into the fetched map
+        # Step 4: Build the latest EFFECTIVE score map for composite calculation.
+        # effective_score (rolling + escalation), not rolling_score alone —
+        # otherwise a severe event diluted by the EWMA in a fast burst would
+        # also fail to move the composite score.
         score_map: dict[str, float] = {
-            p["service"]: p["rolling_score"] for p in service_profiles
+            p["service"]: p["effective_score"] for p in service_profiles
         }
-        score_map[service] = new_service_rolling  # ensure we use the freshest value
+        score_map[service] = new_service_effective  # ensure we use the freshest value
 
         # Step 5: Upsert composite identity profile
         composite = upsert_identity_profile(
             db_connection,
             subject_id=subject_id,
+            event_time= event_time,
             service_scores=score_map,
             cross_service_flag=cross_flag,
             cross_service_flag_reason=cross_reason,
         )
 
         logger.info(
-            "[PROFILE] Updated subject_id=%s service=%s service_score=%.2f composite=%.2f cross_flag=%s",
-            subject_id, service, new_service_rolling, composite, cross_flag,
+            "[PROFILE] Updated subject_id=%s service=%s service_effective=%.2f composite=%.2f cross_flag=%s",
+            subject_id, service, new_service_effective, composite, cross_flag,
         )
 
     except RuntimeError:
@@ -187,7 +205,8 @@ def get_risk_profile(db_connection, subject_id: str) -> Optional[dict]:
       {
         "subject_id": ...,
         "identity_profile": { composite_score, service_scores, cross_service_flag, ... },
-        "service_profiles": [ { service, rolling_score, event_count, ... }, ... ],
+        "service_profiles": [ { service, rolling_score, escalation_score,
+                                 effective_score, event_count, ... }, ... ],
       }
     """
     try:
@@ -216,7 +235,7 @@ def get_service_subject_profiles(db_connection, service: str, page: int = 1, lim
     """
     Service-wide roster: all subjects' risk profile rows for one service.
     """
-    if service not in _VALID_SERVICES:
+    if service not in VALID_SERVICES:
         raise RuntimeError(ErrorCode.INVALID_REQUEST)
 
     try:

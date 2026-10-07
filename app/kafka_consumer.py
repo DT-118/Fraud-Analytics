@@ -2,8 +2,8 @@
 kafka_consumer.py
 
 Consumes fraud events from all four service topics:
-  auth.login.events
-  enroll.events
+  auth.events
+  login.events
   consent.events
   wallet.events
 
@@ -27,12 +27,12 @@ from core.errors import ErrorCode
 from core.logger import logger
 from kafka_producer import produce_decision_event, produce_dlq_event, produce_scored_event
 from service.fraud_service import handle_fraud_event
-from storage.db import get_db_connection
+from storage.db import get_db_connection, release_db_connection
 
 # All 4 service topics — Phase 2 expansion from AUTH-only
 _TOPICS = [
-    "auth.login.events",
-    "enroll.events",
+    "auth.events",
+    "login.events",
     "consent.events",
     "wallet.events",
 ]
@@ -82,6 +82,12 @@ def start_kafka_consumer() -> None:
                     config_version=_CONFIG_VERSION,
                 )
 
+                if fraud_decision.get("duplicate"):
+                   db_connection.rollback()
+                   logger.info("[KAFKA] Duplicate event_id=%s — skipped, offset committed",event_context.event_id)
+                   consumer.commit(message)
+                   continue
+
                 db_connection.commit()
 
                 # Publish to internal scored-events feed (profile updater + Splunk)
@@ -102,7 +108,17 @@ def start_kafka_consumer() -> None:
                 db_connection.rollback()
                 logger.exception("%s: Kafka processing failure — routing to DLQ",
                                  ErrorCode.KAFKA_ERROR)
-                produce_dlq_event(message, str(exc))
+                dlq_ok = produce_dlq_event(message, str(exc))
+                if dlq_ok:
+                    # Message is durably quarantined — safe to advance past it.
+                    consumer.commit(message)
+                else:
+                    logger.error(
+                        "[KAFKA] DLQ write failed for a message that also failed "
+                        "processing — offset NOT committed; will retry on next poll. "
+                        "topic=%s partition=%s offset=%s",
+                        message.topic(), message.partition(), message.offset(),
+                    )
 
             finally:
                 release_db_connection(db_connection)

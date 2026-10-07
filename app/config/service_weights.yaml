@@ -1,20 +1,108 @@
-# =============================================================================
-# Service Weights — Composite Identity Score
-# =============================================================================
-# Defines how each service's rolling risk score contributes to the composite
-# identity risk profile.  Must sum to 1.0.
+# Composite identity risk-profile configuration.
 #
-# AUTH is weighted highest because login is the primary attack surface and
-# the most frequent interaction.  CONSENT is lowest because consent grants
-# rarely carry direct financial risk on their own.
+# This file controls how per-service risk profiles are combined into the
+# subject-level composite profile. Values here affect fraud-profile behavior
+# and must be changed only with regression testing.
 #
-# cross_service_bonus: flat points added when cross-service fraud pattern fires.
-# =============================================================================
+# Composite weights must sum to 1.0.
+#
+# Rule/profile tuning uses intuitive units:
+#   - slow half-lives: days
+#   - burst half-lives/windows: minutes
+#   - escalation half-life: days
+#
+# Rule IDs referenced by other configuration files are meaningful, stable
+# identifiers and must never be reused for a different rule.
 
+
+
+
+# Slow-tier half-lives for routine behavioral drift.
+# A higher value keeps historical evidence relevant for longer.
+service_half_life:
+  AUTH: 7       # 7 days
+  LOGIN: 30    # 30 days
+  WALLET: 14    # 14 days
+  CONSENT: 14   # 14 days
+
+# Fallback slow-tier half-life for a service without an explicit value.
+default_service_half_life_days: 7  # 7 days
+
+# Fast/burst tier used to detect concentrated activity within a short period.
+# The burst average is blended with the slow rolling score.
+burst:
+
+  # Fast-tier half-life per service.
+  half_life_minutes:
+    AUTH: 5       # 5 minutes
+    LOGIN: 15    # 15 minutes
+    WALLET: 10    # 10 minutes
+    CONSENT: 10   # 10 minutes
+
+  # Fallback fast-tier half-life.
+  default_half_life_minutes: 5  # 5 minutes
+
+  # Scores older than this are removed from the burst calculation.
+  window_minutes: 30  # 30 minutes
+
+  # Contribution of the burst score to the blended per-service score.
+  # 0.0 = slow tier only; 1.0 = burst tier only.
+  blend_weight: 0.4
+
+
+# Independent per-service escalation penalty for severe events.
+# This prevents a single HIGH/CRITICAL event from disappearing too quickly
+# inside the ordinary rolling/burst averages.
+escalation:
+
+  # Enables the severe-event escalation mechanism.
+  enabled: true
+
+  # Additive penalty triggered by the event's final risk level.
+  trigger_penalties:
+    HIGH: 15
+    CRITICAL: 30
+
+  # Time for an escalation penalty to decay to half its value.
+  half_life_days: 14  # 14 days
+
+# Relative contribution of each service to the composite identity score.
+# These are the full-activity weights before optional active-service
+# renormalization.
 composite_weights:
-  AUTH:    0.40
-  ENROLL:  0.25
-  WALLET:  0.25
-  CONSENT: 0.10
+  AUTH: 0.40
+  LOGIN: 0.25
+  WALLET: 0.25
+  CONSENT: 0.1
 
+# When true, weights are renormalized across only services that have data for
+# the subject. This prevents a new subject with only one active service from
+# being diluted by inactive service weights.
+renormalize_active_weights: true
+
+# Flat score added when a configured cross-service fraud pattern is active.
+# The profile layer applies time decay using cross_service_half_life_days.
 cross_service_bonus: 15
+
+# Cross-service fraud evidence decays independently from service-level scores.
+# Current policy: configurable within the 30-90 day range.
+cross_service_half_life_days: 60  # 60 days
+
+# The cross-service flag (and its UNDER_REVIEW status) lapses once its decayed
+# bonus falls below this many points. With a 15-point bonus and a 60-day
+# half-life: 7.5 = 60 days, 3.75 = 120 days, 1.0 = ~234 days.
+# A fresh cross-service detection restarts the clock.
+cross_service_flag_min_bonus: 3.75
+
+# Second smoothing pass applied to the composite score.
+# 0.3 means 30% of the new calculated composite and 70% of the previous
+# composite are blended for an established profile.
+composite_smoothing_alpha: 0.3
+
+# Confidence is derived from the decayed effective event count:
+# confidence = 1 - exp(-effective_events / confidence_kappa).
+confidence_kappa: 5
+
+# Confidence at or above this value marks a profile as ESTABLISHED unless
+# another profile-status condition overrides it.
+established_threshold: 0.6

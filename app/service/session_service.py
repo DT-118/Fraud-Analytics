@@ -1,7 +1,7 @@
 """
 session_service.py
 
-Session-level fraud intelligence (Phase 4).
+Session-level fraud intelligence.
 
 A session groups multiple events that share the same session_id.
 When a session accumulates HIGH or CRITICAL events, subsequent events
@@ -9,9 +9,9 @@ in that session carry elevated risk — the session amplifier multiplies
 the final score before risk classification.
 
 Session TTL is per-service (session_config.yaml):
-  AUTH    30 min  — login sessions are short
+  AUTH    30 min  — authentication sessions are short
   WALLET  2 hours — wallet workflows can span time
-  ENROLL  1 hour
+  LOGIN  1 hour
   CONSENT 1 hour
 
 Amplifier rules (first match wins):
@@ -25,11 +25,11 @@ Amplifier rules (first match wins):
 import json
 from pathlib import Path
 from typing import Optional
-
+from datetime import datetime
 from core.config_loader import HotConfig
 from core.logger import logger
 from storage.redis_client import redis_client
-
+from storage.db_pool import savepoint
 _session_config = HotConfig(Path(__file__).parent.parent / "config/session_config.yaml")
 
 
@@ -55,8 +55,7 @@ def _session_key(session_id: str) -> str:
 
 
 def get_session_amplifier(
-    session_id: Optional[str],
-    action_taxonomy: Optional[str] = None,
+    session_id: Optional[str]
 ) -> float:
     """
     Return the session-level score multiplier for the current event.
@@ -97,9 +96,9 @@ def get_session_amplifier(
 
 def update_session_state(
     session_id: Optional[str],
-    event_id: str,
     score: int,
     risk_level: str,
+    event_time: datetime,
     action_taxonomy: Optional[str] = None,
 ) -> None:
     """
@@ -129,9 +128,16 @@ def update_session_state(
                 "suspicious_event_count": 0,
                 "scores":                 [],
                 "service":                action_taxonomy,
+                "first_event_time":       None,
+                "last_event_time":        None,
             }
 
         state["event_count"] += 1
+
+        event_time_iso = event_time.isoformat()
+        if not state.get("first_event_time"):
+            state["first_event_time"] = event_time_iso
+        state["last_event_time"] = event_time_iso
 
         scores = state.get("scores", [])
         scores.append(score)
@@ -173,41 +179,39 @@ def persist_session_summary(db_connection, session_id: str, subject_id: str) -> 
             (state->>'has_critical')::boolean,
             CASE
                 WHEN jsonb_array_length(state->'scores') > 0
-                THEN (
-                    SELECT MAX(s::int)
-                    FROM jsonb_array_elements_text(state->'scores') AS s
-                )
+                THEN (SELECT MAX(s::int) FROM jsonb_array_elements_text(state->'scores') AS s)
                 ELSE 0
             END,
             CASE
                 WHEN (state->>'has_critical')::boolean THEN 'CRITICAL'
                 WHEN (state->>'high_count')::int >= 2  THEN 'HIGH'
                 WHEN jsonb_array_length(state->'scores') > 0
-                     AND (
-                         SELECT MAX(s::int)
-                         FROM jsonb_array_elements_text(state->'scores') AS s
-                     ) >= 30 THEN 'MEDIUM'
+                    AND (SELECT MAX(s::int) FROM jsonb_array_elements_text(state->'scores') AS s) >= 30 THEN 'MEDIUM'
                 WHEN (state->>'event_count')::int > 0 THEN 'LOW'
                 ELSE 'NORISK'
             END,
-            NOW(), NOW(), NOW()
+            COALESCE((state->>'first_event_time')::timestamptz, NOW()),
+            COALESCE((state->>'last_event_time')::timestamptz, NOW()),
+            NOW()
         FROM (SELECT %s::jsonb AS state) s
         ON CONFLICT (session_id) DO UPDATE SET
             event_count        = EXCLUDED.event_count,
             high_event_count   = EXCLUDED.high_event_count,
-            has_critical       = EXCLUDED.has_critical,
-            max_score          = EXCLUDED.max_score,
-            session_risk_level = EXCLUDED.session_risk_level,
-            last_event_at      = NOW(),
-            updated_at         = NOW()
+            has_critical        = EXCLUDED.has_critical,
+            max_score           = EXCLUDED.max_score,
+            session_risk_level  = EXCLUDED.session_risk_level,
+            first_event_at       = LEAST(fraud_sessions.first_event_at, EXCLUDED.first_event_at),
+            last_event_at        = GREATEST(fraud_sessions.last_event_at, EXCLUDED.last_event_at),
+            updated_at          = NOW()
     """
     try:
         raw = redis_client.get(_session_key(session_id))
         if not raw:
             return
 
-        with db_connection.cursor() as cur:
-            cur.execute(sql, (session_id, subject_id, raw))
+        with savepoint(db_connection, "sp_session"):
+            with db_connection.cursor() as cur:
+                cur.execute(sql, (session_id, subject_id, raw))
 
     except Exception as exc:
         logger.warning("[SESSION] persist_session_summary failed: %s", exc)
